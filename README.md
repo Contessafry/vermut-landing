@@ -12,6 +12,18 @@ Steam, Epic Games Store and GOG Galaxy and sets up Wine for each.
 - Spec and documentation: `docs/LANDING-SPEC.md`.
 - Videos: Remotion project in `video/` (see `video/README.md`). It is not part of the web build.
 
+## For AI assistants (llms.txt)
+
+> Vermut is a free, open-source launcher for Apple Silicon Macs (macOS 14 Sonoma or later). It installs
+> Steam, Epic Games Store and GOG Galaxy, gives each its own Wine 11 bottle with DXMT, DXVK or WineD3D,
+> and runs your Windows games. Games with kernel-level anti-cheat don't run. MIT licence.
+
+The site serves [`/llms.txt`](https://llmstxt.org) (summary and links: download, GitHub, FAQ, compatibility,
+requirements, comparison) and `/llms-full.txt` (the whole page in Markdown). Both are route handlers
+(`app/llms.txt/route.ts`, `app/llms-full.txt/route.ts`) generated from `lib/content.ts` + `site.config.ts`
+at build time, so they never drift from the page. `robots.txt` allows all crawlers, including GPTBot,
+ClaudeBot, PerplexityBot and Google-Extended.
+
 ## Develop
 
 ```bash
@@ -31,21 +43,30 @@ change is needed:
 
 | Variable | What | Default today |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SITE_URL` | Production origin, used for canonical, OG, sitemap and robots | Vercel production domain, else `https://vermut.example` |
-| `NEXT_PUBLIC_GITHUB_URL` | Public repo URL | `https://github.com/PLACEHOLDER/vermut` |
-| `NEXT_PUBLIC_DOWNLOAD_URL` | `.dmg` link or latest-release page | `${GITHUB_URL}/releases/latest` |
+| `NEXT_PUBLIC_SITE_URL` | Production origin (canonical, OG, sitemap, robots, llms.txt) | Vercel production domain, else `https://vermut.example` |
+| `NEXT_PUBLIC_GITHUB_URL` | App source repo | `https://github.com/PLACEHOLDER/vermut` |
+| `NEXT_PUBLIC_DMG_NAME` | Release asset name | `Vermut.dmg` |
+| `NEXT_PUBLIC_DOWNLOAD_URL` | Full DMG URL override | `${GITHUB_URL}/releases/latest/download/${DMG_NAME}` |
+| `NEXT_PUBLIC_DMG_SIZE` | Shown next to the button, e.g. `48 MB` | empty (hidden) |
+| `NEXT_PUBLIC_CHECKSUM_URL` | SHA-256 file; `off` hides the link | `${DMG URL}.sha256` |
 | `NEXT_PUBLIC_VERSION` | Public release version | `1.0.0` |
+| `NEXT_PUBLIC_NOTARIZED` | `true` hides the Gatekeeper first-launch steps | `false` |
+| `NEXT_PUBLIC_BREW_CASK` | Homebrew cask token; shows `brew install --cask …` | empty (hidden) |
+| `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | Search Console token | empty |
+| `NEXT_PUBLIC_BING_SITE_VERIFICATION` | Bing Webmaster token (`msvalidate.01`) | empty |
 
-Also re-record the three videos from the revised app (`video/README.md`).
+See `.env.example`.
+
+Releases should publish `Vermut.dmg` (or `NEXT_PUBLIC_DMG_NAME`) and `<name>.sha256` as assets so the "latest/download" links resolve.
 
 ## Deploy on Vercel
 
 1. Push this folder to a Git repository (GitHub, GitLab or Bitbucket).
 2. In Vercel, choose **Add New → Project**, import the repo, and keep framework **Next.js**, root `./`,
    build `next build` and output auto. `video/` is excluded by `.vercelignore` and `tsconfig.json`.
-3. Under **Settings → Environment Variables**, add the four variables above for Production (and Preview).
+3. Under **Settings → Environment Variables**, add the variables above for Production (and Preview).
 4. Deploy. Add the custom domain under **Settings → Domains**, then set `NEXT_PUBLIC_SITE_URL` to it and redeploy.
-5. Check `/robots.txt`, `/sitemap.xml`, `/opengraph-image.png`, and a share preview (for example
+5. Check `/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/.well-known/security.txt`, `/opengraph-image.png`, and a share preview (for example
    opengraph.xyz), and run Lighthouse on the production URL.
 
 Any static-capable Node host works too: run `npm run build && npm start`.

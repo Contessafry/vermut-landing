@@ -1,6 +1,11 @@
 import type { MetadataRoute } from "next";
-import { site } from "@/site.config";
+import { contentUpdated, site } from "@/site.config";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [{ url: site.url, lastModified: new Date("2026-10-19"), changeFrequency: "monthly", priority: 1 }];
+  const lastModified = new Date(contentUpdated);
+  return [
+    { url: site.url, lastModified, changeFrequency: "monthly", priority: 1 },
+    { url: `${site.url}/llms.txt`, lastModified, changeFrequency: "monthly", priority: 0.3 },
+    { url: `${site.url}/llms-full.txt`, lastModified, changeFrequency: "monthly", priority: 0.3 },
+  ];
 }

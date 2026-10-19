@@ -1,5 +1,6 @@
 import { Comparison } from "@/components/comparison";
 import { Compatibility } from "@/components/compatibility";
+import { Download } from "@/components/download";
 import { Faq } from "@/components/faq";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
@@ -14,6 +15,7 @@ export default function Home() {
         <Compatibility />
         <Comparison />
         <Faq />
+        <Download />
       </main>
       <SiteFooter />
     </>

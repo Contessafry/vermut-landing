@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { site } from "@/site.config";
+import { seo } from "@/lib/content";
+import { jsonLdGraph } from "@/lib/structured-data";
+import { site, verification } from "@/site.config";
 import "./globals.css";
 
 /* Marketing type: Bricolage Grotesque display (instanced: opsz 96, wdth 75, wght 600–800)
@@ -28,17 +30,23 @@ const code = localFont({
   fallback: ["ui-monospace", "SF Mono", "Menlo", "monospace"],
 });
 
-const title = "Vermut: Steam, Epic Games and GOG on your Mac";
-const description =
-  "Free, open-source macOS app that installs Steam, Epic Games Store and GOG Galaxy and sets up Wine for each, so Windows games launch with a click on Apple Silicon.";
+const { title, description } = seo;
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: { default: title, template: "%s · Vermut" },
   description,
   applicationName: "Vermut",
-  keywords: ["Vermut", "Wine", "macOS", "Apple Silicon", "Steam on Mac", "Epic Games on Mac", "GOG Galaxy Mac", "Windows games on Mac", "open source"],
-  alternates: { canonical: "/" },
+  keywords: [...seo.keywords],
+  category: "games",
+  alternates: {
+    canonical: "/",
+    types: { "text/markdown": [{ url: "/llms.txt", title: "Vermut for LLMs" }] },
+  },
+  verification: {
+    ...(verification.google ? { google: verification.google } : {}),
+    ...(verification.bing ? { other: { "msvalidate.01": verification.bing } } : {}),
+  },
   openGraph: {
     type: "website",
     url: "/",
@@ -57,22 +65,6 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "Vermut",
-  description,
-  applicationCategory: "GameApplication",
-  operatingSystem: `macOS ${site.minMacOS} or later (Apple Silicon)`,
-  softwareVersion: site.version,
-  license: "https://opensource.org/license/mit",
-  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-  downloadUrl: site.downloadUrl,
-  codeRepository: site.githubUrl,
-  url: site.url,
-  image: `${site.url}/opengraph-image.png`,
-};
-
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${display.variable} ${text.variable} ${code.variable}`}>
@@ -87,7 +79,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script
           type="application/ld+json"
           // Static, server-generated JSON-LD; `<` escaped.
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdGraph()).replace(/</g, "\\u003c") }}
         />
       </body>
     </html>

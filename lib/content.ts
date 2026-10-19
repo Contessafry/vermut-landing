@@ -4,7 +4,7 @@
  * LICENSE) and the running app on 19 Oct 2026. Competitor facts: see
  * `comparison.sources` (checked 19 Oct 2026).
  */
-import { links, site } from "@/site.config";
+import { links, release, site } from "@/site.config";
 
 /** Inline rich text: plain strings and links. */
 export type Rich = ReadonlyArray<string | { readonly text: string; readonly href: string }>;
@@ -44,6 +44,7 @@ const nav: readonly NavItem[] = [
   { label: "Compatibility", href: "#compatibility" },
   { label: "Compare", href: "#compare" },
   { label: "FAQ", href: "#faq" },
+  { label: "Download", href: "#download" },
 ];
 
 export const content = {
@@ -53,7 +54,7 @@ export const content = {
     eyebrow: "Free · Open source · Apple Silicon",
     title: ["Pour.", "Click.", "Play."] as const,
     lead: "Vermut installs Steam, Epic Games Store and GOG Galaxy on your Mac and sets up Wine for each one, so your Windows games launch with a click.",
-    primary: { label: "Download for Mac", href: links.download },
+    primary: { label: "Download for Mac", href: links.downloadSection },
     secondary: { label: "Star on GitHub", href: links.github },
     meta: [
       `Version ${site.version}`,
@@ -280,6 +281,42 @@ export const content = {
     },
   },
 
+  download: {
+    id: "download",
+    eyebrow: "Download",
+    title: "Get Vermut for your Mac.",
+    lead: "One DMG, straight from the latest GitHub release. Free, with no account to create.",
+    primary: { label: `Download Vermut ${site.version} (.dmg)`, href: release.dmgUrl },
+    facts: [
+      { label: "Version", value: site.version },
+      { label: "macOS", value: `${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later` },
+      { label: "Mac", value: "Apple Silicon (M1 or later)" },
+      ...(release.dmgSize ? [{ label: "Size", value: release.dmgSize }] : []),
+      { label: "Licence", value: site.license },
+    ],
+    checksum: release.checksumUrl ? { label: "SHA-256 checksum", href: release.checksumUrl } : null,
+    allReleases: { label: "All releases and release notes", href: release.releasesUrl },
+    brew: release.brewCask ? { label: "Or install with Homebrew", command: `brew install --cask ${release.brewCask}` } : null,
+    installTitle: "Install in a minute",
+    steps: [
+      `Open ${release.dmgName} from your Downloads folder.`,
+      "Drag Vermut to the Applications folder.",
+      "Open Vermut from Applications. If your Mac doesn't have Rosetta 2 yet, Vermut installs it for you.",
+    ],
+    gatekeeper: release.notarized
+      ? null
+      : {
+          title: "First launch: macOS may block the app",
+          intro: "This release isn't notarized by Apple yet, so macOS shows a warning the first time you open it.",
+          steps: [
+            "Open Vermut once and close the warning.",
+            "Go to System Settings › Privacy & Security, scroll down and click Open Anyway next to the Vermut message.",
+            "Confirm in the dialog that follows (macOS may ask for your password). You only do this once.",
+          ],
+          note: "On macOS 14 Sonoma you can also Control-click Vermut in Applications and choose Open.",
+        },
+  },
+
   footer: {
     statement: "Free and open source. No account, no telemetry, no paid tier.",
     cta: { label: "Download for Mac", href: links.download },
@@ -290,6 +327,7 @@ export const content = {
           { label: "GitHub", href: links.github },
           { label: "Releases", href: links.releases },
           { label: `${site.license} licence`, href: links.license },
+          { label: "Brand assets (.zip)", href: site.brandAssets },
         ],
       },
       {
@@ -307,3 +345,21 @@ export const content = {
 } as const;
 
 export type Content = typeof content;
+
+/** SEO strings shared by metadata, JSON-LD and llms.txt. */
+export const seo = {
+  title: "Vermut: play Windows games on your Mac with Steam, Epic and GOG",
+  description:
+    "Free, open-source launcher for Apple Silicon Macs. Vermut installs Steam, Epic Games Store and GOG Galaxy, sets up Wine for each, and runs your Windows games.",
+  keywords: [
+    "play Windows games on Mac",
+    "Steam on Mac Apple Silicon",
+    "Epic Games Store on Mac",
+    "GOG Galaxy on Mac",
+    "Wine for macOS",
+    "Whisky alternative",
+    "CrossOver alternative",
+    "free open source game launcher Mac",
+    "Vermut",
+  ],
+} as const;

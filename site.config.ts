@@ -12,6 +12,40 @@ const env = (key: string) => process.env[key]?.trim() || undefined;
 /** PLACEHOLDER: public GitHub repository (no trailing slash). */
 const githubUrl = env("NEXT_PUBLIC_GITHUB_URL") ?? "https://github.com/PLACEHOLDER/vermut";
 
+/**
+ * Release / download details. All optional env vars; anything unknown stays
+ * hidden on the page instead of showing an invented value.
+ */
+const dmgName = env("NEXT_PUBLIC_DMG_NAME") ?? "Vermut.dmg"; // PLACEHOLDER: release asset name
+const dmgUrl = env("NEXT_PUBLIC_DOWNLOAD_URL") ?? `${githubUrl}/releases/latest/download/${dmgName}`;
+
+export const release = {
+  dmgName,
+  dmgUrl,
+  /** PLACEHOLDER: e.g. "48 MB". Hidden when empty. */
+  dmgSize: env("NEXT_PUBLIC_DMG_SIZE") ?? "",
+  /** SHA-256 checksum file published next to the DMG. Hidden when "off". */
+  checksumUrl:
+    env("NEXT_PUBLIC_CHECKSUM_URL") === "off"
+      ? ""
+      : (env("NEXT_PUBLIC_CHECKSUM_URL") ?? `${githubUrl}/releases/latest/download/${dmgName}.sha256`),
+  releasesUrl: `${githubUrl}/releases`,
+  /** PLACEHOLDER: true once releases are signed + notarized (build.sh has no notarization step today). */
+  notarized: env("NEXT_PUBLIC_NOTARIZED") === "true",
+  /** PLACEHOLDER: Homebrew cask token, e.g. "vermut". Line hidden when empty. */
+  brewCask: env("NEXT_PUBLIC_BREW_CASK") ?? "",
+} as const;
+
+/** Search engine verification tokens (metadata.verification). Omitted when empty. */
+export const verification = {
+  google: env("NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION"),
+  bing: env("NEXT_PUBLIC_BING_SITE_VERIFICATION"),
+} as const;
+
+/** Date the page content was last reviewed (sitemap lastModified, llms.txt). */
+export const contentUpdated = "2026-10-19";
+
+
 export const site = {
   name: "Vermut",
   tagline: "Pour. Click. Play.",
@@ -28,8 +62,8 @@ export const site = {
 
   githubUrl,
 
-  /** PLACEHOLDER: direct .dmg link or the latest-release page. */
-  downloadUrl: env("NEXT_PUBLIC_DOWNLOAD_URL") ?? `${githubUrl}/releases/latest`,
+  /** Direct .dmg link (see `release` below). */
+  downloadUrl: release.dmgUrl,
 
   /** PLACEHOLDER: public release version (the app bundle currently says 1.0.0). */
   version: env("NEXT_PUBLIC_VERSION") ?? "1.0.0",
@@ -38,11 +72,13 @@ export const site = {
   minMacOS: "14.0",
   minMacOSName: "Sonoma",
   license: "MIT",
+  brandAssets: "/brand/vermut-brand-assets.zip",
 } as const;
 
 export const links = {
   github: site.githubUrl,
-  download: site.downloadUrl,
+  download: release.dmgUrl,
+  downloadSection: "#download",
   releases: `${site.githubUrl}/releases`,
   issues: `${site.githubUrl}/issues`,
   newIssue: `${site.githubUrl}/issues/new`,
