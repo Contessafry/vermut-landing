@@ -4,6 +4,15 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  experimental: { globalNotFound: true },
+  // English is the default locale and lives at "/" (no prefix, one canonical URL).
+  // Internally it is the `en` segment of app/[locale]; "/en" itself redirects to "/".
+  async rewrites() {
+    return { beforeFiles: [{ source: "/", destination: "/en" }] };
+  },
+  async redirects() {
+    return [{ source: "/en", destination: "/", permanent: true }];
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     qualities: [75, 85],

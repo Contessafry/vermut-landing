@@ -1,11 +1,12 @@
 import { Plus } from "lucide-react";
-import { content } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
 import { getRelease } from "@/lib/release";
 import { RichText } from "./rich-text";
 import { SectionHeading } from "./section-heading";
 
 /** Native <details>: accessible disclosure, zero JS. */
 export async function Faq() {
+  const content = await getDictionary();
   const s = content.faq;
   const r = await getRelease();
   return (
@@ -47,10 +48,10 @@ export async function Faq() {
               </div>
             ))}
             <div className="grid grid-cols-[6.5rem_1fr] gap-3 border-t border-white/12 py-3.5">
-              <dt className="font-mono text-[0.8125rem] leading-6 text-neutral-400">Latest</dt>
+              <dt className="font-mono text-[0.8125rem] leading-6 text-neutral-400">{content.ui.latest}</dt>
               <dd className="text-[0.9375rem] leading-6">
                 <a href={r.notesUrl} className="underline underline-offset-[3px] hover:text-neutral-300">
-                  Vermut {r.version} release notes
+                  {content.ui.releaseNotes(r.version)}
                 </a>
               </dd>
             </div>

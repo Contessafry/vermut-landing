@@ -1,4 +1,5 @@
 import { content, seo, type CompareCell, type Rich } from "@/lib/content";
+import { localeInfo, localePath, locales } from "@/lib/i18n/config";
 import { getRelease, type Release } from "@/lib/release";
 import { contentUpdated, donate, links, release as cfg, site } from "@/site.config";
 
@@ -43,6 +44,7 @@ ${downloadLines(r)}
 - [FAQ](${site.url}/#faq)
 
 ## Optional
+- Translations of this page: ${locales.filter((l) => l !== "en").map((l) => `[${localeInfo[l].native}](${site.url}${localePath(l)})`).join(", ")}
 - [Full page content in Markdown](${site.url}/llms-full.txt)
 - [Brand assets](${site.url}${site.brandAssets})
 `;

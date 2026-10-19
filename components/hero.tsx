@@ -1,22 +1,23 @@
 import Image from "next/image";
 import { ArrowDownToLine } from "lucide-react";
 import libraryShot from "@/assets/screens/library-dark.png";
-import { content } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
 import { getRelease } from "@/lib/release";
 import { GitHubIcon } from "./icons";
 import { SiteHeader } from "./site-header";
 
 export async function Hero() {
+  const content = await getDictionary();
   const { hero } = content;
   const { version } = await getRelease();
-  const meta = [`Version ${version}`, ...hero.meta];
+  const meta = [content.ui.version(version), ...hero.meta];
   return (
     <section id="top" aria-labelledby="hero-title" className="on-brand relative overflow-hidden bg-brand text-white">
       <SiteHeader />
       <div className="container-page grid-page items-center pt-10 pb-0 md:pt-16 lg:pt-20 lg:pb-24">
         <div className="col-span-full lg:col-span-6">
           <p className="font-mono text-eyebrow uppercase text-white">{hero.eyebrow}</p>
-          <h1 id="hero-title" className="mt-6 font-display text-display font-extrabold">
+          <h1 id="hero-title" lang="en" className="mt-6 font-display text-display font-extrabold">
             {hero.title.map((line) => (
               <span key={line} className="block">
                 {line}
@@ -40,7 +41,7 @@ export async function Hero() {
               {hero.secondary.label}
             </a>
           </div>
-          <ul className="mt-8 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[0.8125rem] text-white" aria-label="Release details">
+          <ul className="mt-8 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[0.8125rem] text-white" aria-label={content.ui.releaseDetails}>
             {meta.map((m, i) => (
               <li key={m} className="flex items-center gap-3">
                 {i > 0 ? <span aria-hidden="true" className="text-white/60">·</span> : null}

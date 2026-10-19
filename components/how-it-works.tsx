@@ -1,8 +1,9 @@
-import { content } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
 import { SectionHeading } from "./section-heading";
 import { StepVideo } from "./step-video";
 
-export function HowItWorks() {
+export async function HowItWorks() {
+  const content = await getDictionary();
   const s = content.howItWorks;
   return (
     <section id={s.id} aria-labelledby={`${s.id}-title`} className="py-24 md:py-32">
@@ -18,7 +19,7 @@ export function HowItWorks() {
                 <span className="h-px w-10 bg-brand/40" />
               </p>
               <h3 className="mt-4 font-display text-[2rem] leading-none font-extrabold md:text-[2.5rem]">
-                <span className="sr-only">Step {Number(step.number)}: </span>
+                <span className="sr-only">{content.ui.stepPrefix(Number(step.number))}</span>
                 {step.title}
               </h3>
               <p className="mt-4 max-w-[46ch] text-body text-muted-foreground text-pretty">{step.body}</p>
@@ -29,7 +30,9 @@ export function HowItWorks() {
             <figure className="col-span-full overflow-hidden rounded-2xl ring-1 ring-neutral-950/8 lg:col-span-8">
               <StepVideo
                 {...step.video}
-                label={`${step.title}: screen recording of Vermut`}
+                label={content.ui.videoLabel(step.title)}
+                playLabel={content.ui.play(content.ui.videoLabel(step.title))}
+                pauseLabel={content.ui.pause(content.ui.videoLabel(step.title))}
                 descriptionId={`${step.id}-video-desc`}
               />
             </figure>

@@ -10,6 +10,8 @@ type Props = {
   width: number;
   height: number;
   label: string;
+  playLabel: string;
+  pauseLabel: string;
   descriptionId: string;
 };
 
@@ -20,7 +22,7 @@ type Props = {
  * - prefers-reduced-motion: never autoplays; shows the poster and a Play button.
  * - Always offers a visible Pause/Play control (WCAG 2.2.2).
  */
-export function StepVideo({ mp4, webm, poster, width, height, label, descriptionId }: Props) {
+export function StepVideo({ mp4, webm, poster, width, height, label, playLabel, pauseLabel, descriptionId }: Props) {
   const ref = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const userPaused = useRef(false);
@@ -91,7 +93,7 @@ export function StepVideo({ mp4, webm, poster, width, height, label, description
         type="button"
         onClick={toggle}
         aria-pressed={!playing}
-        aria-label={playing ? `Pause: ${label}` : `Play: ${label}`}
+        aria-label={playing ? pauseLabel : playLabel}
         className="absolute top-2 right-2 inline-flex size-9 items-center justify-center rounded-full bg-neutral-950/70 text-white shadow-sm transition-colors hover:bg-neutral-950 focus-visible:outline-offset-2 md:top-3 md:right-3"
       >
         {playing ? <Pause className="size-4" aria-hidden="true" /> : <Play className="size-4 translate-x-px" aria-hidden="true" />}

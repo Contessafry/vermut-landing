@@ -1,12 +1,16 @@
-import { content, seo, type Rich } from "@/lib/content";
+import { getDictionaryFor } from "@/lib/i18n";
+import { localeInfo, localePath, type Locale } from "@/lib/i18n/config";
+import type { Rich } from "@/lib/i18n/types";
 import { getRelease } from "@/lib/release";
 import { donate, site } from "@/site.config";
 
 export const plain = (r: Rich) => r.map((p) => (typeof p === "string" ? p : p.text)).join("");
 
-/** One @graph: Organization, WebSite, SoftwareApplication, FAQPage. */
-export async function jsonLdGraph() {
-  const r = await getRelease();
+/** One @graph per locale: Organization, WebSite, SoftwareApplication, FAQPage. */
+export async function jsonLdGraph(locale: Locale) {
+  const [r, t] = await Promise.all([getRelease(), getDictionaryFor(locale)]);
+  const inLanguage = localeInfo[locale].hreflang;
+  const pageUrl = `${site.url}${localePath(locale) === "/" ? "" : localePath(locale)}`;
   const org = `${site.url}/#organization`;
   return {
     "@context": "https://schema.org",
@@ -25,15 +29,15 @@ export async function jsonLdGraph() {
         "@id": `${site.url}/#website`,
         url: site.url,
         name: "Vermut",
-        description: seo.description,
-        inLanguage: "en",
+        inLanguage: Object.values(localeInfo).map((i) => i.hreflang),
         publisher: { "@id": org },
       },
       {
         "@type": "SoftwareApplication",
-        "@id": `${site.url}/#app`,
+        "@id": `${pageUrl}/#app`,
         name: "Vermut",
-        description: seo.description,
+        description: t.seo.description,
+        inLanguage,
         applicationCategory: "GameApplication",
         operatingSystem: `macOS ${site.minMacOS} or later`,
         processorRequirements: "Apple Silicon (arm64)",
@@ -44,21 +48,18 @@ export async function jsonLdGraph() {
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
         downloadUrl: r.dmgUrl,
         releaseNotes: r.notesUrl,
-        installUrl: `${site.url}/#download`,
+        installUrl: `${pageUrl}/#download`,
         codeRepository: site.githubUrl,
-        url: site.url,
+        url: pageUrl,
         image: `${site.url}/opengraph-image.png`,
-        screenshot: [
-          `${site.url}/videos/step-1-poster.webp`,
-          `${site.url}/videos/step-2-poster.webp`,
-          `${site.url}/videos/step-3-poster.webp`,
-        ],
+        screenshot: [1, 2, 3].map((n) => `${site.url}/videos/step-${n}-poster.webp`),
         publisher: { "@id": org },
       },
       {
         "@type": "FAQPage",
-        "@id": `${site.url}/#faq`,
-        mainEntity: content.faq.items.map((f) => ({
+        "@id": `${pageUrl}/#faq`,
+        inLanguage,
+        mainEntity: t.faq.items.map((f) => ({
           "@type": "Question",
           name: f.q,
           acceptedAnswer: { "@type": "Answer", text: plain(f.a) },

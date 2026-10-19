@@ -1,15 +1,17 @@
 import { ArrowDownToLine } from "lucide-react";
-import { content } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
 import { getRelease } from "@/lib/release";
+import { LanguageSwitcher } from "./language-switcher";
 import { site } from "@/site.config";
 
 export async function SiteFooter() {
+  const content = await getDictionary();
   const { version } = await getRelease();
   const f = content.footer;
   return (
     <footer className="bg-neutral-950 text-neutral-300">
       <div className="container-page grid-page gap-y-12 py-20 md:py-24">
-        <div className="col-span-full md:col-span-6 lg:col-span-5">
+        <div className="col-span-full lg:col-span-5">
           {/* eslint-disable-next-line @next/next/no-img-element -- static SVG lockup */}
           <img src="/brand/vermut-lockup-white.svg" alt="Vermut" width={124} height={37} className="h-9 w-auto" loading="lazy" />
           <p className="mt-6 max-w-[38ch] text-body text-pretty">{f.statement}</p>
@@ -26,7 +28,7 @@ export async function SiteFooter() {
           <nav
             key={col.title}
             aria-label={col.title}
-            className={i === 0 ? "col-span-2 md:col-span-3 md:col-start-7 lg:col-span-2 lg:col-start-9" : "col-span-2 md:col-span-3 lg:col-span-2"}
+            className={i === 0 ? "col-span-2 md:col-span-4 lg:col-span-2 lg:col-start-7" : "col-span-2 md:col-span-4 lg:col-span-2"}
           >
             <h2 className="font-mono text-eyebrow uppercase text-neutral-400">{col.title}</h2>
             <ul className="mt-4 flex flex-col gap-2.5">
@@ -40,8 +42,9 @@ export async function SiteFooter() {
             </ul>
           </nav>
         ))}
+        <LanguageSwitcher variant="list" className="col-span-2 md:col-span-4 lg:col-span-2" />
         <p className="col-span-full border-t border-white/10 pt-8 text-[0.8125rem] leading-relaxed text-neutral-400">
-          {f.legal} <span className="whitespace-nowrap">Version {version}.</span>
+          {f.legal} <span className="whitespace-nowrap">{content.ui.version(version)}.</span>
         </p>
       </div>
     </footer>

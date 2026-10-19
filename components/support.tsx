@@ -1,5 +1,5 @@
 import { Bug, Gamepad2, HeartHandshake, Share2, Star } from "lucide-react";
-import { content } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
 import { donate, site } from "@/site.config";
 import { CopyButton } from "./copy-button";
 import { SectionHeading } from "./section-heading";
@@ -7,7 +7,8 @@ import { SectionHeading } from "./section-heading";
 const icons = { star: Star, bug: Bug, games: Gamepad2 } as const;
 const linkClass = "font-medium text-foreground underline underline-offset-[3px] hover:text-muted-foreground";
 
-export function Support() {
+export async function Support() {
+  const content = await getDictionary();
   const s = content.support;
   const url = site.url;
   const text = encodeURIComponent(s.share.text);
@@ -30,7 +31,7 @@ export function Support() {
             >
               <HeartHandshake className="size-5" aria-hidden="true" />
               {s.donateLabel}
-              <span className="sr-only"> (opens in a new tab)</span>
+              <span className="sr-only">{content.ui.opensNewTab}</span>
             </a>
             <p className="text-[0.875rem] text-muted-foreground">{s.donateNote}</p>
           </div>
@@ -60,10 +61,10 @@ export function Support() {
                 {shareLinks.map((l) => (
                   <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className={linkClass}>
                     {l.label}
-                    <span className="sr-only"> (share, opens in a new tab)</span>
+                    <span className="sr-only">{content.ui.shareNewTab}</span>
                   </a>
                 ))}
-                <CopyButton value={url} label="Copy link to Vermut" />
+                <CopyButton value={url} label={content.ui.copyLink} copiedLabel={content.ui.copied} />
               </div>
             </li>
           </ul>

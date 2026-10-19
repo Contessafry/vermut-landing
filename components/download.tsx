@@ -1,5 +1,5 @@
 import { ArrowDownToLine, SquareTerminal } from "lucide-react";
-import { content } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
 import { getRelease } from "@/lib/release";
 import { links, release as cfg, site } from "@/site.config";
 import { CopyButton } from "./copy-button";
@@ -7,16 +7,17 @@ import { NotOpenedDialog, OpenAnywayPanel } from "./gatekeeper-illustrations";
 import { SectionHeading } from "./section-heading";
 
 export async function Download() {
+  const content = await getDictionary();
   const s = content.download;
   const g = s.gatekeeper;
   const r = await getRelease();
   const curl = cfg.installer.scriptUrl ? `curl -fsSL ${cfg.installer.scriptUrl} | bash` : "";
   const facts = [
-    { label: "Version", value: r.version },
-    { label: "Size", value: r.sizeLabel },
-    { label: "macOS", value: `${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later` },
-    { label: "Mac", value: "Apple Silicon (M1 or later)" },
-    { label: "Licence", value: site.license },
+    { label: content.ui.facts.version, value: r.version },
+    { label: content.ui.facts.size, value: r.sizeLabel },
+    { label: content.ui.facts.macos, value: content.ui.macosRequirement.replace(/^macOS /, "") },
+    { label: content.ui.facts.mac, value: content.ui.appleSilicon },
+    { label: content.ui.facts.licence, value: site.license },
   ];
   return (
     <section id={s.id} aria-labelledby={`${s.id}-title`} className="scroll-mt-4 py-24 md:py-32">
@@ -43,7 +44,7 @@ export async function Download() {
                 <dt className="font-mono text-[0.8125rem] leading-6 text-muted-foreground">{s.shaLabel}</dt>
                 <dd className="flex items-start gap-1">
                   <code className="min-w-0 font-mono text-[0.8125rem] leading-6 break-all select-all">{r.sha256}</code>
-                  <CopyButton value={r.sha256} label={`Copy SHA-256 of ${r.dmgName}`} />
+                  <CopyButton value={r.sha256} label={content.ui.copySha(r.dmgName)} copiedLabel={content.ui.copied} />
                 </dd>
               </div>
             ) : null}
@@ -85,7 +86,7 @@ export async function Download() {
                 <a href="#sha256" className="font-medium text-foreground underline underline-offset-[3px]">
                   {g.whySha}
                 </a>
-                .
+                {g.whyEnd}
               </p>
               <ol className="mt-5 flex flex-col gap-4">
                 {g.steps.map((step, i) => (
@@ -104,10 +105,10 @@ export async function Download() {
                 ))}
               </ol>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <NotOpenedDialog />
-                <OpenAnywayPanel />
+                <NotOpenedDialog t={content.illustrations.dialog} />
+                <OpenAnywayPanel t={content.illustrations.settings} />
               </div>
-              <p className="mt-2 text-[0.75rem] text-muted-foreground">{g.illustrationNote}</p>
+              <p className="mt-2 text-[0.75rem] text-muted-foreground">{content.illustrations.note}</p>
               <p className="mt-4 text-[0.875rem] text-muted-foreground text-pretty">
                 {g.note}{" "}
                 <a href={g.appleHref} className="font-medium text-foreground underline underline-offset-[3px]">
@@ -128,7 +129,7 @@ export async function Download() {
                   <code>{curl}</code>
                 </pre>
                 <div className="text-neutral-300 [&_button:hover]:bg-white/10 [&_button:hover]:text-white [&_button]:text-neutral-300">
-                  <CopyButton value={curl} label="Copy install command" />
+                  <CopyButton value={curl} label={content.ui.copyInstall} copiedLabel={content.ui.copied} />
                 </div>
               </div>
               <p className="mt-3 text-[0.9375rem]">

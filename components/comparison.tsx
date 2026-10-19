@@ -1,6 +1,7 @@
 import { Check, Minus, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { content, type CompareCell } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
+import type { CompareCell } from "@/lib/content";
 import { cn } from "@/lib/utils";
 import { RichText } from "./rich-text";
 import { SectionHeading } from "./section-heading";
@@ -24,7 +25,8 @@ function Cell({ cell }: { cell: CompareCell }) {
   );
 }
 
-export function Comparison() {
+export async function Comparison() {
+  const content = await getDictionary();
   const s = content.comparison;
   return (
     <section id={s.id} aria-labelledby={`${s.id}-title`} className="py-24 md:py-32">
@@ -61,7 +63,7 @@ export function Comparison() {
         <div className="col-span-full hidden md:block">
           <Table className="min-w-[760px] table-fixed border-separate border-spacing-0 text-[0.9375rem]">
             <caption className="sr-only">
-              Vermut compared with Whisky, CrossOver and Heroic. Bracketed numbers refer to the sources listed below the table.
+              {content.ui.compareCaption}
             </caption>
             <colgroup>
               <col className="w-[22%]" />
@@ -73,7 +75,7 @@ export function Comparison() {
             <TableHeader className="[&_tr]:border-0">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="sticky left-0 z-10 bg-background">
-                  <span className="sr-only">Feature</span>
+                  <span className="sr-only">{content.ui.feature}</span>
                 </TableHead>
                 {s.columns.map((c, i) => (
                   <TableHead

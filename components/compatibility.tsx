@@ -1,5 +1,6 @@
 import { Ban, CircleCheck, Wrench } from "lucide-react";
-import { content, type CompatGroup } from "@/lib/content";
+import { getDictionary } from "@/lib/i18n";
+import type { CompatGroup } from "@/lib/content";
 import { RichText } from "./rich-text";
 import { SectionHeading } from "./section-heading";
 
@@ -9,7 +10,8 @@ const tone: Record<CompatGroup["id"], { icon: typeof CircleCheck; className: str
   no: { icon: Ban, className: "text-muted-foreground" },
 };
 
-export function Compatibility() {
+export async function Compatibility() {
+  const content = await getDictionary();
   const s = content.compatibility;
   return (
     <section id={s.id} aria-labelledby={`${s.id}-title`} className="bg-neutral-100/70 py-24 md:py-32">

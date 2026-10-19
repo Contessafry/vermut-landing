@@ -214,8 +214,8 @@
    Marketing layer (landing only)
    --------------------------------------------------------------------------- */
 @theme inline {
-  --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-display-face), var(--font-text), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-text), var(--font-cjk, ui-sans-serif), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), var(--font-text), var(--font-cjk, ui-sans-serif), ui-sans-serif, sans-serif;
   --font-mono: var(--font-code), ui-monospace, "SF Mono", Menlo, monospace;
   --font-heading: var(--font-display);
 
@@ -306,4 +306,28 @@
     grid-template-columns: repeat(12, minmax(0, 1fr));
     column-gap: 1.5rem;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   CJK locales: Latin glyphs keep Bricolage/Hanken; Han/Kana fall through to the
+   Mac's own system fonts (no web-font download). Headings get room for the
+   taller glyphs; lines break at phrase boundaries where supported.
+   --------------------------------------------------------------------------- */
+:root:lang(ja) {
+  --font-cjk: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Noto Sans JP", "Noto Sans CJK JP", Meiryo;
+}
+:root:lang(zh-Hans) {
+  --font-cjk: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Noto Sans CJK SC", "Microsoft YaHei";
+}
+:lang(ja) :is(h1, h2, h3):not([lang="en"]),
+:lang(zh-Hans) :is(h1, h2, h3):not([lang="en"]) {
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+:lang(ja) :is(h2, h3, p, li, dd) {
+  word-break: auto-phrase;
+  line-break: strict;
+}
+:lang(zh-Hans) :is(p, li, dd) {
+  line-break: strict;
 }
