@@ -1,9 +1,21 @@
-import { ArrowDownToLine, ShieldCheck } from "lucide-react";
+import { ArrowDownToLine, SquareTerminal } from "lucide-react";
 import { content } from "@/lib/content";
+import { getRelease } from "@/lib/release";
+import { release as cfg, site } from "@/site.config";
+import { CopyButton } from "./copy-button";
 import { SectionHeading } from "./section-heading";
 
-export function Download() {
+export async function Download() {
   const s = content.download;
+  const r = await getRelease();
+  const curl = cfg.installer.scriptUrl ? `curl -fsSL ${cfg.installer.scriptUrl} | bash` : "";
+  const facts = [
+    { label: "Version", value: r.version },
+    { label: "Size", value: r.sizeLabel },
+    { label: "macOS", value: `${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later` },
+    { label: "Mac", value: "Apple Silicon (M1 or later)" },
+    { label: "Licence", value: site.license },
+  ];
   return (
     <section id={s.id} aria-labelledby={`${s.id}-title`} className="scroll-mt-4 py-24 md:py-32">
       <div className="container-page grid-page gap-y-12">
@@ -11,40 +23,39 @@ export function Download() {
 
         <div className="col-span-full lg:col-span-5">
           <a
-            href={s.primary.href}
+            href={r.dmgUrl}
             className="inline-flex h-13 items-center gap-2.5 rounded-full bg-neutral-950 px-6 text-base font-semibold text-white transition-colors hover:bg-neutral-800"
           >
             <ArrowDownToLine className="size-5" aria-hidden="true" />
-            {s.primary.label}
+            {s.primaryLabel(r.version)}
           </a>
           <dl className="mt-8 flex flex-col border-b">
-            {s.facts.map((f) => (
+            {facts.map((f) => (
               <div key={f.label} className="grid grid-cols-[6.5rem_1fr] gap-3 border-t py-3">
                 <dt className="font-mono text-[0.8125rem] leading-6 text-muted-foreground">{f.label}</dt>
                 <dd className="text-[0.9375rem] leading-6">{f.value}</dd>
               </div>
             ))}
-          </dl>
-          <ul className="mt-6 flex flex-col gap-2 text-[0.9375rem]">
-            {s.checksum ? (
-              <li>
-                <a href={s.checksum.href} className="inline-flex items-center gap-2 font-medium underline underline-offset-[3px] hover:text-muted-foreground">
-                  <ShieldCheck className="size-4" aria-hidden="true" />
-                  {s.checksum.label}
-                </a>
-              </li>
+            {r.sha256 ? (
+              <div className="grid grid-cols-[6.5rem_1fr] gap-3 border-t py-3">
+                <dt className="font-mono text-[0.8125rem] leading-6 text-muted-foreground">{s.shaLabel}</dt>
+                <dd className="flex items-start gap-1">
+                  <code className="min-w-0 font-mono text-[0.8125rem] leading-6 break-all select-all">{r.sha256}</code>
+                  <CopyButton value={r.sha256} label={`Copy SHA-256 of ${r.dmgName}`} />
+                </dd>
+              </div>
             ) : null}
-            <li>
-              <a href={s.allReleases.href} className="font-medium underline underline-offset-[3px] hover:text-muted-foreground">
-                {s.allReleases.label}
-              </a>
-            </li>
-          </ul>
-          {s.brew ? (
+          </dl>
+          <p className="mt-6 text-[0.9375rem]">
+            <a href={cfg.releasesUrl} className="font-medium underline underline-offset-[3px] hover:text-muted-foreground">
+              {s.allReleases}
+            </a>
+          </p>
+          {cfg.brewCask ? (
             <div className="mt-6">
-              <p className="text-[0.9375rem] text-muted-foreground">{s.brew.label}</p>
+              <p className="text-[0.9375rem] text-muted-foreground">{s.brewLabel}</p>
               <pre className="mt-2 overflow-x-auto rounded-lg bg-neutral-950 px-4 py-3 font-mono text-[0.875rem] text-white">
-                <code>{s.brew.command}</code>
+                <code>{`brew install --cask ${cfg.brewCask}`}</code>
               </pre>
             </div>
           ) : null}
@@ -53,14 +64,14 @@ export function Download() {
         <div className="col-span-full lg:col-span-6 lg:col-start-7">
           <h3 className="text-h3 font-semibold">{s.installTitle}</h3>
           <ol className="mt-5 flex flex-col gap-4">
-            {s.steps.map((step, i) => (
+            {s.steps(r.dmgName).map((step, i) => (
               <li key={step} className="grid grid-cols-[2.25rem_1fr] items-baseline gap-2 text-body text-pretty">
                 <span className="font-mono text-[0.8125rem] text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>
                 <span>{step}</span>
               </li>
             ))}
           </ol>
-          {s.gatekeeper ? (
+          {cfg.notarized ? null : (
             <div className="mt-8 rounded-xl border bg-neutral-100/70 p-6">
               <h3 className="text-[1.0625rem] font-semibold">{s.gatekeeper.title}</h3>
               <p className="mt-2 text-body text-muted-foreground text-pretty">{s.gatekeeper.intro}</p>
@@ -70,6 +81,28 @@ export function Download() {
                 ))}
               </ol>
               <p className="mt-4 text-[0.9375rem] text-muted-foreground text-pretty">{s.gatekeeper.note}</p>
+            </div>
+          )}
+          {curl ? (
+            <div className="mt-8 border-t pt-8">
+              <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold">
+                <SquareTerminal className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                {s.terminal.title}
+              </h3>
+              <p className="mt-2 text-[0.9375rem] text-muted-foreground text-pretty">{s.terminal.body}</p>
+              <div className="mt-4 flex items-start gap-2 rounded-lg bg-neutral-950 py-2 pr-2 pl-4">
+                <pre className="min-w-0 flex-1 overflow-x-auto py-1.5 font-mono text-[0.8125rem] leading-6 text-white">
+                  <code>{curl}</code>
+                </pre>
+                <div className="text-neutral-300 [&_button:hover]:bg-white/10 [&_button:hover]:text-white [&_button]:text-neutral-300">
+                  <CopyButton value={curl} label="Copy install command" />
+                </div>
+              </div>
+              <p className="mt-3 text-[0.9375rem]">
+                <a href={cfg.installer.sourceUrl} className="font-medium underline underline-offset-[3px] hover:text-muted-foreground">
+                  {s.terminal.sourceLabel}
+                </a>
+              </p>
             </div>
           ) : null}
         </div>

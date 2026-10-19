@@ -9,31 +9,36 @@
 
 const env = (key: string) => process.env[key]?.trim() || undefined;
 
-/** PLACEHOLDER: public GitHub repository (no trailing slash). */
-const githubUrl = env("NEXT_PUBLIC_GITHUB_URL") ?? "https://github.com/PLACEHOLDER/vermut";
+/** App source repository (no trailing slash). */
+const githubUrl = env("NEXT_PUBLIC_GITHUB_URL") ?? "https://github.com/Contessafry/Vermut";
+const repoSlug = githubUrl.replace(/^https:\/\/github\.com\//, "");
 
 /**
- * Release / download details. All optional env vars; anything unknown stays
- * hidden on the page instead of showing an invented value.
+ * Release / download details. `lib/release.ts` reads the latest GitHub release
+ * at build time (revalidated hourly); these values are the fallback when the
+ * API is unreachable. Facts from release v1.0.0 (19 Oct 2026).
  */
-const dmgName = env("NEXT_PUBLIC_DMG_NAME") ?? "Vermut.dmg"; // PLACEHOLDER: release asset name
-const dmgUrl = env("NEXT_PUBLIC_DOWNLOAD_URL") ?? `${githubUrl}/releases/latest/download/${dmgName}`;
-
 export const release = {
-  dmgName,
-  dmgUrl,
-  /** PLACEHOLDER: e.g. "48 MB". Hidden when empty. */
-  dmgSize: env("NEXT_PUBLIC_DMG_SIZE") ?? "",
-  /** SHA-256 checksum file published next to the DMG. Hidden when "off". */
-  checksumUrl:
-    env("NEXT_PUBLIC_CHECKSUM_URL") === "off"
-      ? ""
-      : (env("NEXT_PUBLIC_CHECKSUM_URL") ?? `${githubUrl}/releases/latest/download/${dmgName}.sha256`),
+  repoSlug,
+  apiUrl: `https://api.github.com/repos/${repoSlug}/releases/latest`,
   releasesUrl: `${githubUrl}/releases`,
-  /** PLACEHOLDER: true once releases are signed + notarized (build.sh has no notarization step today). */
+  fallback: {
+    version: env("NEXT_PUBLIC_VERSION") ?? "1.0.0",
+    tag: "v1.0.0",
+    dmgName: env("NEXT_PUBLIC_DMG_NAME") ?? "Vermut-1.0.0.dmg",
+    dmgUrl: env("NEXT_PUBLIC_DOWNLOAD_URL") ?? `${githubUrl}/releases/download/v1.0.0/Vermut-1.0.0.dmg`,
+    sizeBytes: Number(env("NEXT_PUBLIC_DMG_SIZE_BYTES") ?? 1987245),
+    sha256: env("NEXT_PUBLIC_DMG_SHA256") ?? "d854610fe444b76ad24fa55ee1c392464ec2e46705a2f384814dc33fa8e3d279",
+  },
+  /** Releases are unsigned and not notarized today, so Gatekeeper steps are shown. */
   notarized: env("NEXT_PUBLIC_NOTARIZED") === "true",
-  /** PLACEHOLDER: Homebrew cask token, e.g. "vermut". Line hidden when empty. */
+  /** Homebrew cask token; the brew line is hidden while empty (no cask exists). */
   brewCask: env("NEXT_PUBLIC_BREW_CASK") ?? "",
+  /** One-line Terminal installer (secondary option). Empty URL hides it. */
+  installer: {
+    scriptUrl: env("NEXT_PUBLIC_INSTALL_SCRIPT_URL") ?? `https://raw.githubusercontent.com/${repoSlug}/main/install.sh`,
+    sourceUrl: `${githubUrl}/blob/main/install.sh`,
+  },
 } as const;
 
 /** Search engine verification tokens (metadata.verification). Omitted when empty. */
@@ -62,11 +67,11 @@ export const site = {
 
   githubUrl,
 
-  /** Direct .dmg link (see `release` below). */
-  downloadUrl: release.dmgUrl,
+  /** Fallback DMG link; the page uses lib/release.ts (latest GitHub release). */
+  downloadUrl: release.fallback.dmgUrl,
 
-  /** PLACEHOLDER: public release version (the app bundle currently says 1.0.0). */
-  version: env("NEXT_PUBLIC_VERSION") ?? "1.0.0",
+  /** Public release version (fallback; the Download section shows the live tag). */
+  version: release.fallback.version,
 
   /** Known facts (from Package.swift / build.sh Info.plist and LICENSE). */
   minMacOS: "14.0",
@@ -77,7 +82,7 @@ export const site = {
 
 export const links = {
   github: site.githubUrl,
-  download: release.dmgUrl,
+  download: release.fallback.dmgUrl,
   downloadSection: "#download",
   releases: `${site.githubUrl}/releases`,
   issues: `${site.githubUrl}/issues`,
@@ -87,6 +92,6 @@ export const links = {
 } as const;
 
 /** True while any public placeholder is still in use (shown in README check). */
-export const hasPlaceholders = [site.url, site.githubUrl].some(
+export const hasPlaceholders = [site.url].some(
   (v) => v.includes("PLACEHOLDER") || v.includes("vermut.example"),
 );

@@ -41,23 +41,26 @@ Node 20.9 or later.
 Search the code for `PLACEHOLDER`. Every value can be set as an environment variable on Vercel, so no code
 change is needed:
 
+The Download section, JSON-LD and llms.txt read the **latest GitHub release** at build time
+(`lib/release.ts`, `use cache` + `cacheLife`, revalidated hourly): first `.dmg` asset (name, size, URL),
+tag, and the SHA-256 parsed from the release notes. The values below are only the fallback.
+
 | Variable | What | Default today |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SITE_URL` | Production origin (canonical, OG, sitemap, robots, llms.txt) | Vercel production domain, else `https://vermut.example` |
-| `NEXT_PUBLIC_GITHUB_URL` | App source repo | `https://github.com/PLACEHOLDER/vermut` |
-| `NEXT_PUBLIC_DMG_NAME` | Release asset name | `Vermut.dmg` |
-| `NEXT_PUBLIC_DOWNLOAD_URL` | Full DMG URL override | `${GITHUB_URL}/releases/latest/download/${DMG_NAME}` |
-| `NEXT_PUBLIC_DMG_SIZE` | Shown next to the button, e.g. `48 MB` | empty (hidden) |
-| `NEXT_PUBLIC_CHECKSUM_URL` | SHA-256 file; `off` hides the link | `${DMG URL}.sha256` |
-| `NEXT_PUBLIC_VERSION` | Public release version | `1.0.0` |
+| `NEXT_PUBLIC_GITHUB_URL` | App source repo | `https://github.com/Contessafry/Vermut` |
+| `NEXT_PUBLIC_VERSION` | Fallback version | `1.0.0` |
+| `NEXT_PUBLIC_DMG_NAME` / `NEXT_PUBLIC_DOWNLOAD_URL` | Fallback DMG name / URL | `Vermut-1.0.0.dmg` / v1.0.0 asset |
+| `NEXT_PUBLIC_DMG_SIZE_BYTES` / `NEXT_PUBLIC_DMG_SHA256` | Fallback size / checksum | v1.0.0 values |
 | `NEXT_PUBLIC_NOTARIZED` | `true` hides the Gatekeeper first-launch steps | `false` |
 | `NEXT_PUBLIC_BREW_CASK` | Homebrew cask token; shows `brew install --cask …` | empty (hidden) |
+| `NEXT_PUBLIC_INSTALL_SCRIPT_URL` | One-line installer script | `raw.githubusercontent.com/Contessafry/Vermut/main/install.sh` |
 | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | Search Console token | empty |
 | `NEXT_PUBLIC_BING_SITE_VERIFICATION` | Bing Webmaster token (`msvalidate.01`) | empty |
 
 See `.env.example`.
 
-Releases should publish `Vermut.dmg` (or `NEXT_PUBLIC_DMG_NAME`) and `<name>.sha256` as assets so the "latest/download" links resolve.
+Each release should attach one `.dmg` and put `SHA-256 (<name>.dmg): <hash>` in its notes.
 
 ## Deploy on Vercel
 

@@ -1,10 +1,12 @@
 import { content, seo, type Rich } from "@/lib/content";
-import { release, site } from "@/site.config";
+import { getRelease } from "@/lib/release";
+import { site } from "@/site.config";
 
 export const plain = (r: Rich) => r.map((p) => (typeof p === "string" ? p : p.text)).join("");
 
 /** One @graph: Organization, WebSite, SoftwareApplication, FAQPage. */
-export function jsonLdGraph() {
+export async function jsonLdGraph() {
+  const r = await getRelease();
   const org = `${site.url}/#organization`;
   return {
     "@context": "https://schema.org",
@@ -34,11 +36,13 @@ export function jsonLdGraph() {
         applicationCategory: "GameApplication",
         operatingSystem: `macOS ${site.minMacOS} or later`,
         processorRequirements: "Apple Silicon (arm64)",
-        softwareVersion: site.version,
+        softwareVersion: r.version,
+        fileSize: r.sizeLabel,
         license: "https://opensource.org/license/mit",
         isAccessibleForFree: true,
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-        downloadUrl: release.dmgUrl,
+        downloadUrl: r.dmgUrl,
+        releaseNotes: r.notesUrl,
         installUrl: `${site.url}/#download`,
         codeRepository: site.githubUrl,
         url: site.url,

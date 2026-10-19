@@ -65,7 +65,7 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${display.variable} ${text.variable} ${code.variable}`}>
       <body>
@@ -79,7 +79,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script
           type="application/ld+json"
           // Static, server-generated JSON-LD; `<` escaped.
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdGraph()).replace(/</g, "\\u003c") }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(await jsonLdGraph()).replace(/</g, "\\u003c") }}
         />
       </body>
     </html>

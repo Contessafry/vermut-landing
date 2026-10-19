@@ -217,7 +217,7 @@ These are the only values we don't know. All of them are in `site.config.ts` and
 | Key | Env | Current |
 |---|---|---|
 | Site URL | `NEXT_PUBLIC_SITE_URL` (falls back to `VERCEL_PROJECT_PRODUCTION_URL`) | `https://vermut.example` |
-| GitHub URL | `NEXT_PUBLIC_GITHUB_URL` | `https://github.com/PLACEHOLDER/vermut` |
+| GitHub URL | `NEXT_PUBLIC_GITHUB_URL` | `https://github.com/Contessafry/Vermut` |
 | Download URL | `NEXT_PUBLIC_DOWNLOAD_URL` | `{github}/releases/latest` |
 | Version | `NEXT_PUBLIC_VERSION` | `1.0.0` (from the app bundle; confirm for the release) |
 

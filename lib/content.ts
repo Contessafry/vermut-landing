@@ -4,7 +4,7 @@
  * LICENSE) and the running app on 19 Oct 2026. Competitor facts: see
  * `comparison.sources` (checked 19 Oct 2026).
  */
-import { links, release, site } from "@/site.config";
+import { links, site } from "@/site.config";
 
 /** Inline rich text: plain strings and links. */
 export type Rich = ReadonlyArray<string | { readonly text: string; readonly href: string }>;
@@ -286,35 +286,31 @@ export const content = {
     eyebrow: "Download",
     title: "Get Vermut for your Mac.",
     lead: "One DMG, straight from the latest GitHub release. Free, with no account to create.",
-    primary: { label: `Download Vermut ${site.version} (.dmg)`, href: release.dmgUrl },
-    facts: [
-      { label: "Version", value: site.version },
-      { label: "macOS", value: `${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later` },
-      { label: "Mac", value: "Apple Silicon (M1 or later)" },
-      ...(release.dmgSize ? [{ label: "Size", value: release.dmgSize }] : []),
-      { label: "Licence", value: site.license },
-    ],
-    checksum: release.checksumUrl ? { label: "SHA-256 checksum", href: release.checksumUrl } : null,
-    allReleases: { label: "All releases and release notes", href: release.releasesUrl },
-    brew: release.brewCask ? { label: "Or install with Homebrew", command: `brew install --cask ${release.brewCask}` } : null,
+    primaryLabel: (version: string) => `Download Vermut ${version} (.dmg)`,
+    shaLabel: "SHA-256",
+    allReleases: "All releases and release notes",
+    brewLabel: "Or install with Homebrew",
     installTitle: "Install in a minute",
-    steps: [
-      `Open ${release.dmgName} from your Downloads folder.`,
+    steps: (dmgName: string) => [
+      `Open ${dmgName} from your Downloads folder.`,
       "Drag Vermut to the Applications folder.",
       "Open Vermut from Applications. If your Mac doesn't have Rosetta 2 yet, Vermut installs it for you.",
     ],
-    gatekeeper: release.notarized
-      ? null
-      : {
-          title: "First launch: macOS may block the app",
-          intro: "This release isn't notarized by Apple yet, so macOS shows a warning the first time you open it.",
-          steps: [
-            "Open Vermut once and close the warning.",
-            "Go to System Settings › Privacy & Security, scroll down and click Open Anyway next to the Vermut message.",
-            "Confirm in the dialog that follows (macOS may ask for your password). You only do this once.",
-          ],
-          note: "On macOS 14 Sonoma you can also Control-click Vermut in Applications and choose Open.",
-        },
+    gatekeeper: {
+      title: "First launch: macOS may block the app",
+      intro: "This release isn't notarized by Apple yet, so macOS shows a warning the first time you open it.",
+      steps: [
+        "Open Vermut once and close the warning.",
+        "Go to System Settings › Privacy & Security, scroll down and click Open Anyway next to the Vermut message.",
+        "Confirm in the dialog that follows (macOS may ask for your password). You only do this once.",
+      ],
+      note: "On macOS 14 Sonoma you can also Control-click Vermut in Applications and choose Open.",
+    },
+    terminal: {
+      title: "Prefer Terminal? One-line install (skips the Gatekeeper prompt)",
+      body: "The script downloads the latest DMG and copies Vermut to Applications. Read it before you run it.",
+      sourceLabel: "View install.sh source",
+    },
   },
 
   footer: {

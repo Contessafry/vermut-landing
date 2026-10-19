@@ -1,22 +1,33 @@
 import { content, seo, type CompareCell, type Rich } from "@/lib/content";
-import { contentUpdated, links, release, site } from "@/site.config";
+import { getRelease, type Release } from "@/lib/release";
+import { contentUpdated, links, release as cfg, site } from "@/site.config";
 
 const abs = (href: string) => (href.startsWith("#") ? `${site.url}/${href}` : href.startsWith("/") ? `${site.url}${href}` : href);
 const md = (r: Rich) => r.map((p) => (typeof p === "string" ? p : `[${p.text}](${abs(p.href)})`)).join("");
 const req = content.faq.requirements.items.map((r) => `${r.label}: ${r.value}`).join("; ");
 
 /** llms.txt (https://llmstxt.org): H1, blockquote summary, details, H2 link lists. */
-export function llmsTxt() {
+function downloadLines(r: Release) {
+  return [
+    `- [Download Vermut ${r.version} (.dmg, ${r.sizeLabel})](${r.dmgUrl}): ${r.dmgName}, latest release from GitHub`,
+    r.sha256 ? `- SHA-256 of ${r.dmgName}: \`${r.sha256}\`` : "",
+    `- [Install steps](${site.url}/#download): open the DMG, drag to Applications${cfg.notarized ? "" : ", allow it once in System Settings › Privacy & Security (the app is not notarized)"}`,
+    cfg.installer.scriptUrl ? `- Terminal alternative: \`curl -fsSL ${cfg.installer.scriptUrl} | bash\` ([source](${cfg.installer.sourceUrl}))` : "",
+    cfg.brewCask ? `- Homebrew: \`brew install --cask ${cfg.brewCask}\`` : "",
+    `- [Release notes](${r.notesUrl}) · [All releases](${cfg.releasesUrl})`,
+  ].filter(Boolean).join("\n");
+}
+
+export async function llmsTxt() {
+  const r = await getRelease();
   return `# ${site.name}
 
 > ${seo.description}
 
-Vermut is a native macOS app (MIT licence, version ${site.version}). It gives each store its own Wine bottle with Wine 11 and a graphics layer (DXMT, DXVK or WineD3D; D3DMetal if Apple's Game Porting Toolkit is installed). Requirements: ${req}. Games with kernel-level anti-cheat do not run. Last updated ${contentUpdated}.
+Vermut is a native macOS app (MIT licence, version ${r.version}). It gives each store its own Wine bottle with Wine 11 and a graphics layer (DXMT, DXVK or WineD3D; D3DMetal if Apple's Game Porting Toolkit is installed). Requirements: ${req}. Games with kernel-level anti-cheat do not run. Last updated ${contentUpdated}.
 
 ## Download
-- [Download Vermut ${site.version} (.dmg)](${release.dmgUrl}): latest release from GitHub
-- [Install steps](${site.url}/#download): open the DMG, drag to Applications${release.notarized ? "" : ", allow it once in System Settings › Privacy & Security"}
-- [All releases](${release.releasesUrl}): release notes and older versions${release.checksumUrl ? `\n- [SHA-256 checksum](${release.checksumUrl})` : ""}${release.brewCask ? `\n- Homebrew: \`brew install --cask ${release.brewCask}\`` : ""}
+${downloadLines(r)}
 
 ## Project
 - [GitHub repository](${links.github}): source code, issues and contributing guide
@@ -35,7 +46,8 @@ Vermut is a native macOS app (MIT licence, version ${site.version}). It gives ea
 `;
 }
 
-export function llmsFullTxt() {
+export async function llmsFullTxt() {
+  const r = await getRelease();
   const { hero, howItWorks: h, compatibility: c, comparison: cmp, faq, download: d, footer } = content;
   const table = [
     `| | ${cmp.columns.join(" | ")} |`,
@@ -90,14 +102,13 @@ ${faq.requirements.items.map((r) => `- ${r.label}: ${r.value}`).join("\n")}
 
 ${d.lead}
 
-- [${d.primary.label}](${d.primary.href})
-${d.facts.map((f) => `- ${f.label}: ${f.value}`).join("\n")}${d.checksum ? `\n- [${d.checksum.label}](${d.checksum.href})` : ""}
-- [${d.allReleases.label}](${d.allReleases.href})${d.brew ? `\n- ${d.brew.label}: \`${d.brew.command}\`` : ""}
+${downloadLines(r)}
+- Requirements: macOS ${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later, Apple Silicon (M1 or later)
 
 ### ${d.installTitle}
 
-${d.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}
-${d.gatekeeper ? `\n### ${d.gatekeeper.title}\n\n${d.gatekeeper.intro}\n\n${d.gatekeeper.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\n${d.gatekeeper.note}\n` : ""}
+${d.steps(r.dmgName).map((s, i) => `${i + 1}. ${s}`).join("\n")}
+${cfg.notarized ? "" : `\n### ${d.gatekeeper.title}\n\n${d.gatekeeper.intro}\n\n${d.gatekeeper.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\n${d.gatekeeper.note}\n`}
 ---
 
 ${footer.statement} Source code: ${links.github}. ${footer.legal}
