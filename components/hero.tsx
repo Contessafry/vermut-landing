@@ -2,11 +2,14 @@ import Image from "next/image";
 import { ArrowDownToLine } from "lucide-react";
 import libraryShot from "@/assets/screens/library-dark.png";
 import { content } from "@/lib/content";
+import { getRelease } from "@/lib/release";
 import { GitHubIcon } from "./icons";
 import { SiteHeader } from "./site-header";
 
-export function Hero() {
+export async function Hero() {
   const { hero } = content;
+  const { version } = await getRelease();
+  const meta = [`Version ${version}`, ...hero.meta];
   return (
     <section id="top" aria-labelledby="hero-title" className="on-brand relative overflow-hidden bg-brand text-white">
       <SiteHeader />
@@ -38,7 +41,7 @@ export function Hero() {
             </a>
           </div>
           <ul className="mt-8 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[0.8125rem] text-white" aria-label="Release details">
-            {hero.meta.map((m, i) => (
+            {meta.map((m, i) => (
               <li key={m} className="flex items-center gap-3">
                 {i > 0 ? <span aria-hidden="true" className="text-white/60">·</span> : null}
                 {m}

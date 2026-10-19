@@ -1,8 +1,10 @@
 import { ArrowDownToLine } from "lucide-react";
 import { content } from "@/lib/content";
+import { getRelease } from "@/lib/release";
 import { site } from "@/site.config";
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  const { version } = await getRelease();
   const f = content.footer;
   return (
     <footer className="bg-neutral-950 text-neutral-300">
@@ -39,7 +41,7 @@ export function SiteFooter() {
           </nav>
         ))}
         <p className="col-span-full border-t border-white/10 pt-8 text-[0.8125rem] leading-relaxed text-neutral-400">
-          {f.legal} <span className="whitespace-nowrap">Version {site.version}.</span>
+          {f.legal} <span className="whitespace-nowrap">Version {version}.</span>
         </p>
       </div>
     </footer>

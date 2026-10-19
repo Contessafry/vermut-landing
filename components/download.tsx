@@ -1,12 +1,14 @@
 import { ArrowDownToLine, SquareTerminal } from "lucide-react";
 import { content } from "@/lib/content";
 import { getRelease } from "@/lib/release";
-import { release as cfg, site } from "@/site.config";
+import { links, release as cfg, site } from "@/site.config";
 import { CopyButton } from "./copy-button";
+import { NotOpenedDialog, OpenAnywayPanel } from "./gatekeeper-illustrations";
 import { SectionHeading } from "./section-heading";
 
 export async function Download() {
   const s = content.download;
+  const g = s.gatekeeper;
   const r = await getRelease();
   const curl = cfg.installer.scriptUrl ? `curl -fsSL ${cfg.installer.scriptUrl} | bash` : "";
   const facts = [
@@ -37,7 +39,7 @@ export async function Download() {
               </div>
             ))}
             {r.sha256 ? (
-              <div className="grid grid-cols-[6.5rem_1fr] gap-3 border-t py-3">
+              <div id="sha256" className="grid scroll-mt-8 grid-cols-[6.5rem_1fr] gap-3 border-t py-3">
                 <dt className="font-mono text-[0.8125rem] leading-6 text-muted-foreground">{s.shaLabel}</dt>
                 <dd className="flex items-start gap-1">
                   <code className="min-w-0 font-mono text-[0.8125rem] leading-6 break-all select-all">{r.sha256}</code>
@@ -73,14 +75,45 @@ export async function Download() {
           </ol>
           {cfg.notarized ? null : (
             <div className="mt-8 rounded-xl border bg-neutral-100/70 p-6">
-              <h3 className="text-[1.0625rem] font-semibold">{s.gatekeeper.title}</h3>
-              <p className="mt-2 text-body text-muted-foreground text-pretty">{s.gatekeeper.intro}</p>
-              <ol className="mt-4 list-decimal space-y-2 pl-5 text-body text-pretty">
-                {s.gatekeeper.steps.map((g) => (
-                  <li key={g}>{g}</li>
+              <h3 className="text-[1.0625rem] font-semibold">{g.title}</h3>
+              <p className="mt-2 text-[0.9375rem] text-muted-foreground text-pretty">
+                {g.why}
+                <a href={links.github} className="font-medium text-foreground underline underline-offset-[3px]">
+                  {g.whySource}
+                </a>
+                {g.whyAnd}
+                <a href="#sha256" className="font-medium text-foreground underline underline-offset-[3px]">
+                  {g.whySha}
+                </a>
+                .
+              </p>
+              <ol className="mt-5 flex flex-col gap-4">
+                {g.steps.map((step, i) => (
+                  <li key={step.title} className="grid grid-cols-[1.75rem_1fr] gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="flex size-7 items-center justify-center rounded-full bg-neutral-950 font-mono text-[0.75rem] text-white"
+                    >
+                      {i + 1}
+                    </span>
+                    <div>
+                      <p className="font-semibold">{step.title}</p>
+                      <p className="mt-0.5 text-[0.9375rem] text-muted-foreground text-pretty">{step.body}</p>
+                    </div>
+                  </li>
                 ))}
               </ol>
-              <p className="mt-4 text-[0.9375rem] text-muted-foreground text-pretty">{s.gatekeeper.note}</p>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <NotOpenedDialog />
+                <OpenAnywayPanel />
+              </div>
+              <p className="mt-2 text-[0.75rem] text-muted-foreground">{g.illustrationNote}</p>
+              <p className="mt-4 text-[0.875rem] text-muted-foreground text-pretty">
+                {g.note}{" "}
+                <a href={g.appleHref} className="font-medium text-foreground underline underline-offset-[3px]">
+                  {g.appleLabel}
+                </a>
+              </p>
             </div>
           )}
           {curl ? (

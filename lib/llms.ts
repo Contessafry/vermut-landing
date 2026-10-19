@@ -24,7 +24,7 @@ export async function llmsTxt() {
 
 > ${seo.description}
 
-Vermut is a native macOS app (MIT licence, version ${r.version}). It gives each store its own Wine bottle with Wine 11 and a graphics layer (DXMT, DXVK or WineD3D; D3DMetal if Apple's Game Porting Toolkit is installed). Requirements: ${req}. Games with kernel-level anti-cheat do not run. Last updated ${contentUpdated}.
+Vermut is a native macOS app (MIT licence, version ${r.version}). It installs Steam and GOG Galaxy with their official installers and adds Epic Games in beta through the open-source Legendary client (no Epic Games Launcher). It gives each store its own Wine bottle with Wine 11 and a graphics layer (DXMT, DXVK or WineD3D; D3DMetal if Apple's Game Porting Toolkit is installed). Requirements: ${req}. Games with kernel-level anti-cheat do not run. The app is not signed with an Apple Developer ID or notarized, so on first launch macOS asks you to allow it once in System Settings › Privacy & Security. Last updated ${contentUpdated}.
 
 ## Download
 ${downloadLines(r)}
@@ -62,7 +62,7 @@ Source: ${site.url} · Last updated ${contentUpdated}
 
 ${hero.lead}
 
-${hero.meta.join(" · ")}
+Version ${r.version} · ${hero.meta.join(" · ")}
 
 ## ${h.title}
 
@@ -108,7 +108,7 @@ ${downloadLines(r)}
 ### ${d.installTitle}
 
 ${d.steps(r.dmgName).map((s, i) => `${i + 1}. ${s}`).join("\n")}
-${cfg.notarized ? "" : `\n### ${d.gatekeeper.title}\n\n${d.gatekeeper.intro}\n\n${d.gatekeeper.steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\n${d.gatekeeper.note}\n`}
+${cfg.notarized ? "" : `\n### ${d.gatekeeper.title}\n\n${d.gatekeeper.why}${d.gatekeeper.whySource} (${links.github})${d.gatekeeper.whyAnd}${d.gatekeeper.whySha}${r.sha256 ? ` (${r.sha256})` : ""}.\n\n${d.gatekeeper.steps.map((s, i) => `${i + 1}. **${s.title}.** ${s.body}`).join("\n")}\n\n${d.gatekeeper.note} Source: [${d.gatekeeper.appleLabel}](${d.gatekeeper.appleHref})\n`}
 ---
 
 ${footer.statement} Source code: ${links.github}. ${footer.legal}

@@ -53,11 +53,11 @@ export const content = {
   hero: {
     eyebrow: "Free · Open source · Apple Silicon",
     title: ["Pour.", "Click.", "Play."] as const,
-    lead: "Vermut installs Steam, Epic Games Store and GOG Galaxy on your Mac and sets up Wine for each one, so your Windows games launch with a click.",
+    lead: "Vermut installs Steam and GOG Galaxy on your Mac, adds your Epic Games library (beta), and sets up Wine for each, so your Windows games launch with a click.",
     primary: { label: "Download for Mac", href: links.downloadSection },
     secondary: { label: "Star on GitHub", href: links.github },
+    /** The live release version is prepended by the Hero component. */
     meta: [
-      `Version ${site.version}`,
       `macOS ${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later`,
       "Apple Silicon",
       `${site.license} licence`,
@@ -76,7 +76,7 @@ export const content = {
         id: "pick",
         number: "01",
         title: "Pick a store",
-        body: "Choose Steam, Epic Games Store or GOG Galaxy. Vermut downloads the official installer and gives each store its own bottle, so they never get in each other's way.",
+        body: "Choose Steam, GOG Galaxy or Epic Games (beta). Steam and GOG get their official installers; Epic runs through the open-source Legendary client, with no Epic launcher. Each store gets its own bottle, so they never get in each other's way.",
         video: {
           mp4: "/videos/step-1.mp4",
           webm: "/videos/step-1.webm",
@@ -84,14 +84,14 @@ export const content = {
           width: 1600,
           height: 1000,
           description:
-            "Screen recording: the Stores screen lists Steam, Epic Games Store and GOG Galaxy, each installed in its own bottle. The pointer moves across the stores and clicks Open Steam.",
+            "Screen recording: the Stores screen lists Steam, Epic Games (beta) and GOG Galaxy, each installed in its own bottle. The pointer moves across the stores and clicks Open Steam.",
         },
       },
       {
         id: "wine",
         number: "02",
         title: "Vermut sets up Wine",
-        body: "Each bottle gets Wine 11 and the graphics layer that suits its store: DXMT for Steam, WineD3D for Epic and GOG. You can change it later. You don't have to.",
+        body: "Each bottle gets Wine 11 and the graphics layer that suits its store: DXMT for Steam, DXVK for Epic, WineD3D for GOG. You can change it later. You don't have to.",
         video: {
           mp4: "/videos/step-2.mp4",
           webm: "/videos/step-2.webm",
@@ -132,7 +132,7 @@ export const content = {
         items: [
           ["DirectX 9, 10 and 11 games, translated to Metal by DXMT or DXVK."],
           ["Indie and older titles, which are often the easiest wins."],
-          ["The store apps themselves: Steam, Epic Games Store and GOG Galaxy."],
+          ["The Steam and GOG Galaxy clients themselves, plus your Epic Games library through Legendary (beta)."],
         ],
       },
       {
@@ -202,7 +202,7 @@ export const content = {
       {
         label: "Sets up Steam, Epic and GOG for you",
         cells: [
-          { value: "Yes", note: "One bottle per store, one click each", tone: "yes" },
+          { value: "Yes", note: "Steam and GOG in their own bottles; Epic (beta) via Legendary, no Epic launcher", tone: "yes" },
           { value: "No", note: "You create a bottle and run each installer", tone: "no" },
           { value: "Yes", note: "From its install catalogue; Epic and GOG since CrossOver 25 [9][10]", tone: "yes" },
           { value: "Epic, GOG, Amazon", note: "Its own launcher; no Steam client [6]", tone: "neutral" },
@@ -263,8 +263,19 @@ export const content = {
       { q: "Does it work on Intel Macs?", a: ["No. Vermut is built for Apple Silicon: M1 and every chip since."] },
       { q: "Which version of macOS do I need?", a: [`macOS ${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later.`] },
       { q: "Will my game run?", a: ["It depends on the game. Most DirectX 9 to 11 games do; games with kernel-level anti-cheat don't. See ", { text: "compatibility", href: "#compatibility" }, " for the full picture."] },
-      { q: "Does Vermut see my Steam or Epic password?", a: ["No. You sign in inside the official store app, running in its own bottle. Vermut never handles your credentials."] },
+      { q: "Does Vermut see my Steam or Epic password?", a: ["No. For Steam and GOG you sign in inside the official store app, running in its own bottle. For Epic (beta) you sign in on Epic's own login page, and Legendary keeps the session on your Mac."] },
+      { q: "Does Vermut install the Epic Games Launcher?", a: ["No. Epic support is in beta and uses ", { text: "Legendary", href: "https://github.com/derrod/legendary" }, ", an open-source Epic client: sign in, see your library, install and launch games, without the Epic Games Launcher."] },
       { q: "Does it include Apple's Game Porting Toolkit?", a: ["No, Vermut never bundles it. If you install it yourself, Vermut detects it and offers D3DMetal as a graphics option."] },
+      {
+        q: "Why does macOS warn me?",
+        a: [
+          "Vermut is free and open source, and it isn't signed with a paid Apple Developer ID or notarized, so Gatekeeper can't vouch for it. Allow it once in System Settings › Privacy & Security (see ",
+          { text: "the first-launch steps", href: "#download" },
+          "). You can review the ",
+          { text: "source code", href: links.github },
+          " and compare the DMG's SHA-256 with the one on this page.",
+        ],
+      },
       { q: "Do I need Terminal or Homebrew?", a: ["No. Everything happens in the app, from installing a store to launching a game."] },
       { q: "How is it different from Whisky?", a: ["Whisky was a general-purpose Wine wrapper and is no longer maintained. Vermut is built around game stores: one bottle per store, set up for you, with a Library for everything you install."] },
       { q: "How do I uninstall it?", a: ["Delete each bottle from its Danger zone in Vermut, which removes the store and its games, then drag Vermut to the Trash."] },
@@ -297,14 +308,21 @@ export const content = {
       "Open Vermut from Applications. If your Mac doesn't have Rosetta 2 yet, Vermut installs it for you.",
     ],
     gatekeeper: {
-      title: "First launch: macOS may block the app",
-      intro: "This release isn't notarized by Apple yet, so macOS shows a warning the first time you open it.",
+      title: "First launch: allow Vermut once",
+      why: "macOS warns you because Vermut is a free, open-source app that isn't signed with a paid Apple Developer ID. You can read every line of the ",
+      whySource: "source code",
+      whyAnd: " and check the download against its ",
+      whySha: "SHA-256",
       steps: [
-        "Open Vermut once and close the warning.",
-        "Go to System Settings › Privacy & Security, scroll down and click Open Anyway next to the Vermut message.",
-        "Confirm in the dialog that follows (macOS may ask for your password). You only do this once.",
+        { title: "Open Vermut", body: "Double-click Vermut in Applications. macOS shows “Vermut” Not Opened. Click Done, not Move to Trash." },
+        { title: "Open Privacy & Security", body: "Choose Apple menu › System Settings, click Privacy & Security in the sidebar, then scroll down to Security." },
+        { title: "Click Open Anyway", body: "Next to “Vermut” was blocked to protect your Mac, click Open Anyway. The button appears for about an hour after step 1." },
+        { title: "Confirm", body: "Click Open, then confirm with your password or Touch ID. macOS remembers the choice, so you only do this once." },
       ],
-      note: "On macOS 14 Sonoma you can also Control-click Vermut in Applications and choose Open.",
+      note: "This is the flow on macOS 15 Sequoia and later, where Control-click › Open no longer skips the check. On macOS 14 Sonoma, Control-click › Open still works.",
+      appleLabel: "Apple Support: Open a Mac app from an unknown developer",
+      appleHref: "https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac",
+      illustrationNote: "Simplified illustrations, not screenshots.",
     },
     terminal: {
       title: "Prefer Terminal? One-line install (skips the Gatekeeper prompt)",
@@ -344,13 +362,13 @@ export type Content = typeof content;
 
 /** SEO strings shared by metadata, JSON-LD and llms.txt. */
 export const seo = {
-  title: "Vermut: play Windows games on your Mac with Steam, Epic and GOG",
+  title: "Vermut: play Windows games on your Mac with Steam, GOG and Epic",
   description:
-    "Free, open-source launcher for Apple Silicon Macs. Vermut installs Steam, Epic Games Store and GOG Galaxy, sets up Wine for each, and runs your Windows games.",
+    "Free, open-source launcher for Apple Silicon Macs. Vermut installs Steam and GOG Galaxy, adds Epic Games (beta), sets up Wine and runs your Windows games.",
   keywords: [
     "play Windows games on Mac",
     "Steam on Mac Apple Silicon",
-    "Epic Games Store on Mac",
+    "Epic Games on Mac",
     "GOG Galaxy on Mac",
     "Wine for macOS",
     "Whisky alternative",

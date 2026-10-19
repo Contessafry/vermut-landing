@@ -1,7 +1,7 @@
 # vermut-landing
 
 The production landing page for **Vermut**, the free, open-source macOS app that installs
-Steam, Epic Games Store and GOG Galaxy and sets up Wine for each.
+Steam and GOG Galaxy, adds Epic Games (beta, via Legendary) and sets up Wine for each.
 *Pour. Click. Play.*
 
 - Next.js 16 App Router, fully static: every section is a React Server Component. The only client
@@ -15,7 +15,7 @@ Steam, Epic Games Store and GOG Galaxy and sets up Wine for each.
 ## For AI assistants (llms.txt)
 
 > Vermut is a free, open-source launcher for Apple Silicon Macs (macOS 14 Sonoma or later). It installs
-> Steam, Epic Games Store and GOG Galaxy, gives each its own Wine 11 bottle with DXMT, DXVK or WineD3D,
+> Steam and GOG Galaxy plus Epic Games (beta, via the open-source Legendary client; no Epic launcher), gives each its own Wine 11 bottle with DXMT, DXVK or WineD3D,
 > and runs your Windows games. Games with kernel-level anti-cheat don't run. MIT licence.
 
 The site serves [`/llms.txt`](https://llmstxt.org) (summary and links: download, GitHub, FAQ, compatibility,
