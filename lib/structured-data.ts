@@ -1,6 +1,6 @@
 import { content, seo, type Rich } from "@/lib/content";
 import { getRelease } from "@/lib/release";
-import { site } from "@/site.config";
+import { donate, site } from "@/site.config";
 
 export const plain = (r: Rich) => r.map((p) => (typeof p === "string" ? p : p.text)).join("");
 
@@ -18,6 +18,7 @@ export async function jsonLdGraph() {
         url: site.url,
         logo: `${site.url}/icon-512.png`,
         sameAs: [site.githubUrl],
+        ...(donate.paypal ? { potentialAction: { "@type": "DonateAction", target: donate.paypal, name: "Donate with PayPal" } } : {}),
       },
       {
         "@type": "WebSite",

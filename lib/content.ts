@@ -43,6 +43,7 @@ const nav: readonly NavItem[] = [
   { label: "How it works", href: "#how-it-works" },
   { label: "Compatibility", href: "#compatibility" },
   { label: "Compare", href: "#compare" },
+  { label: "Support", href: "#support" },
   { label: "FAQ", href: "#faq" },
   { label: "Download", href: "#download" },
 ];
@@ -254,6 +255,26 @@ export const content = {
     ] satisfies readonly Source[],
   },
 
+  support: {
+    id: "support",
+    eyebrow: "Support Vermut",
+    title: "Free, and staying that way.",
+    lead: "Vermut is built in spare time. Donations pay for that time and for the Macs and games we test on. No paid tier is coming either way.",
+    donateLabel: "Donate with PayPal",
+    donateNote: "Opens PayPal in a new tab.",
+    otherTitle: "Not a money thing? These help just as much.",
+    options: [
+      { id: "star", title: "Star on GitHub", body: "Stars help other Mac gamers find the project.", label: "Star the repository", href: links.github },
+      { id: "bug", title: "Report a bug", body: "Something broke? An issue with your macOS version and logs gets it fixed.", label: "Open a bug report", href: links.newIssue },
+      { id: "games", title: "Tell us which games work", body: "Played something? Post the game, store and graphics backend, working or not.", label: "Send a game report", href: links.gameReport },
+    ],
+    share: {
+      title: "Share Vermut",
+      body: "Know someone who games on a Mac? Send them the link.",
+      text: "Vermut: play Windows games on your Mac with Steam, GOG and Epic. Free and open source.",
+    },
+  },
+
   faq: {
     id: "faq",
     eyebrow: "FAQ",
@@ -347,6 +368,7 @@ export const content = {
       {
         title: "Contribute",
         links: [
+          { label: "Support Vermut", href: "#support" },
           { label: "Contributing guide", href: links.contributing },
           { label: "Report a bug", href: links.newIssue },
           { label: "Open issues", href: links.issues },

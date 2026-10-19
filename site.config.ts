@@ -41,6 +41,11 @@ export const release = {
   },
 } as const;
 
+/** Donations. The Donate button is hidden while the URL is unset. */
+export const donate = {
+  paypal: env("NEXT_PUBLIC_DONATE_PAYPAL_URL") ?? "https://www.paypal.me/contessafry",
+} as const;
+
 /** Search engine verification tokens (metadata.verification). Omitted when empty. */
 export const verification = {
   google: env("NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION"),
@@ -87,6 +92,7 @@ export const links = {
   releases: `${site.githubUrl}/releases`,
   issues: `${site.githubUrl}/issues`,
   newIssue: `${site.githubUrl}/issues/new`,
+  gameReport: `${site.githubUrl}/issues/new?title=${encodeURIComponent("Game report: ")}`,
   contributing: `${site.githubUrl}/blob/main/CONTRIBUTING.md`,
   license: `${site.githubUrl}/blob/main/LICENSE`,
 } as const;

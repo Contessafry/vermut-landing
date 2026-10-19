@@ -1,6 +1,6 @@
 import { content, seo, type CompareCell, type Rich } from "@/lib/content";
 import { getRelease, type Release } from "@/lib/release";
-import { contentUpdated, links, release as cfg, site } from "@/site.config";
+import { contentUpdated, donate, links, release as cfg, site } from "@/site.config";
 
 const abs = (href: string) => (href.startsWith("#") ? `${site.url}/${href}` : href.startsWith("/") ? `${site.url}${href}` : href);
 const md = (r: Rich) => r.map((p) => (typeof p === "string" ? p : `[${p.text}](${abs(p.href)})`)).join("");
@@ -32,6 +32,8 @@ ${downloadLines(r)}
 ## Project
 - [GitHub repository](${links.github}): source code, issues and contributing guide
 - [Report a bug](${links.newIssue})
+- [Report which games work](${links.gameReport})${donate.paypal ? `\n- [Donate with PayPal](${donate.paypal}): supports development and test hardware` : ""}
+- [Support Vermut](${site.url}/#support): donations, stars, bug and game reports
 
 ## Docs
 - [How it works](${site.url}/#how-it-works): pick a store, Vermut sets up Wine, play

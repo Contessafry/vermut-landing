@@ -55,6 +55,7 @@ tag, and the SHA-256 parsed from the release notes. The values below are only th
 | `NEXT_PUBLIC_NOTARIZED` | `true` hides the Gatekeeper first-launch steps | `false` |
 | `NEXT_PUBLIC_BREW_CASK` | Homebrew cask token; shows `brew install --cask …` | empty (hidden) |
 | `NEXT_PUBLIC_INSTALL_SCRIPT_URL` | One-line installer script | `raw.githubusercontent.com/Contessafry/Vermut/main/install.sh` |
+| `NEXT_PUBLIC_DONATE_PAYPAL_URL` | PayPal donate link for the Support section (new tab); also JSON-LD DonateAction and llms.txt | `https://www.paypal.me/contessafry` |
 | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | Search Console token | empty |
 | `NEXT_PUBLIC_BING_SITE_VERIFICATION` | Bing Webmaster token (`msvalidate.01`) | empty |
 
