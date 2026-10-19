@@ -1,0 +1,309 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Vermut design tokens v2 (verbatim from brandkit v2/tokens/tokens.css).
+   Brand red (--brand) is marketing-only; red in UI states = --destructive only.
+   --------------------------------------------------------------------------- */
+/* Vermut design tokens v2 — shadcn/ui v4 (Tailwind v4) theme.
+   Neutral: Zinc. Brand red (--brand*) is for logo & marketing ONLY: never buttons, links, focus or selection in the app.
+   Red inside the UI always means error (--destructive / --error-*). */
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1.000 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1.000 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1.000 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.210 0.006 285.885);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.210 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.517 0.017 286);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.210 0.006 285.885);
+  --border: oklch(0.920 0.004 286.32);
+  --input: oklch(0.920 0.004 286.32);
+  --ring: oklch(0.552 0.016 285.938);
+  --sidebar: oklch(0.985 0.001 286.375);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-primary: oklch(0.210 0.006 285.885);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent-foreground: oklch(0.210 0.006 285.885);
+  --sidebar-border: oklch(0.920 0.004 286.32);
+  --sidebar-ring: oklch(0.552 0.016 285.938);
+  --success: oklch(0.530 0.139 152);
+  --success-foreground: oklch(0.985 0 0);
+  --success-subtle: oklch(0.973 0.025 155);
+  --success-subtle-foreground: oklch(0.420 0.110 152);
+  --success-border: oklch(0.880 0.080 155);
+  --warning: oklch(0.800 0.160 80);
+  --warning-foreground: oklch(0.280 0.069 55);
+  --warning-subtle: oklch(0.981 0.024 90);
+  --warning-subtle-foreground: oklch(0.470 0.116 55);
+  --warning-border: oklch(0.900 0.100 88);
+  --destructive: oklch(0.560 0.215 29);
+  --destructive-foreground: oklch(0.985 0 0);
+  --error-subtle: oklch(0.972 0.013 29);
+  --error-subtle-foreground: oklch(0.500 0.190 29);
+  --error-border: oklch(0.880 0.060 29);
+  --info: oklch(0.550 0.180 258);
+  --info-foreground: oklch(0.985 0 0);
+  --info-subtle: oklch(0.970 0.014 255);
+  --info-subtle-foreground: oklch(0.450 0.160 260);
+  --info-border: oklch(0.880 0.055 255);
+  /* marketing only */
+  --brand: oklch(0.540 0.216 17);
+  --brand-foreground: oklch(1.000 0 0);
+  --chart-1: oklch(0.210 0.006 285.885);
+  --chart-2: oklch(0.442 0.017 285.786);
+  --chart-3: oklch(0.705 0.015 286.067);
+  --chart-4: oklch(0.550 0.180 258);
+  --chart-5: oklch(0.530 0.139 152);
+}
+
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.210 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.210 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.920 0.004 286.32);
+  --primary-foreground: oklch(0.210 0.006 285.885);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+  --border: oklch(1.000 0 0 / 10%);
+  --input: oklch(1.000 0 0 / 15%);
+  --ring: oklch(0.705 0.015 286.067);
+  --sidebar: oklch(0.210 0.006 285.885);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.920 0.004 286.32);
+  --sidebar-primary-foreground: oklch(0.210 0.006 285.885);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1.000 0 0 / 10%);
+  --sidebar-ring: oklch(0.705 0.015 286.067);
+  --success: oklch(0.700 0.150 152);
+  --success-foreground: oklch(0.210 0.030 152);
+  --success-subtle: oklch(0.255 0.045 155);
+  --success-subtle-foreground: oklch(0.830 0.130 155);
+  --success-border: oklch(0.380 0.070 155);
+  --warning: oklch(0.820 0.160 82);
+  --warning-foreground: oklch(0.270 0.067 55);
+  --warning-subtle: oklch(0.270 0.045 70);
+  --warning-subtle-foreground: oklch(0.860 0.140 85);
+  --warning-border: oklch(0.410 0.080 70);
+  --destructive: oklch(0.575 0.200 29);
+  --destructive-foreground: oklch(0.985 0 0);
+  --error-subtle: oklch(0.270 0.060 29);
+  --error-subtle-foreground: oklch(0.800 0.110 29);
+  --error-border: oklch(0.410 0.110 29);
+  --info: oklch(0.680 0.150 255);
+  --info-foreground: oklch(0.210 0.040 258);
+  --info-subtle: oklch(0.260 0.050 258);
+  --info-subtle-foreground: oklch(0.820 0.090 252);
+  --info-border: oklch(0.390 0.090 258);
+  /* marketing only */
+  --brand: oklch(0.540 0.216 17);
+  --brand-foreground: oklch(1.000 0 0);
+  --chart-1: oklch(0.920 0.004 286.32);
+  --chart-2: oklch(0.705 0.015 286.067);
+  --chart-3: oklch(0.442 0.017 285.786);
+  --chart-4: oklch(0.680 0.150 255);
+  --chart-5: oklch(0.700 0.150 152);
+}
+
+/* Raw scales */
+:root {
+  --neutral-50: oklch(0.985 0 0); /* #FAFAFA */
+  --neutral-100: oklch(0.967 0.001 286.375); /* #F4F4F5 */
+  --neutral-200: oklch(0.920 0.004 286.32); /* #E4E4E7 */
+  --neutral-300: oklch(0.871 0.006 286.286); /* #D4D4D8 */
+  --neutral-400: oklch(0.705 0.015 286.067); /* #9F9FA9 */
+  --neutral-500: oklch(0.552 0.016 285.938); /* #71717B */
+  --neutral-600: oklch(0.442 0.017 285.786); /* #52525C */
+  --neutral-700: oklch(0.370 0.013 285.805); /* #3F3F46 */
+  --neutral-800: oklch(0.274 0.006 286.033); /* #27272A */
+  --neutral-900: oklch(0.210 0.006 285.885); /* #18181B */
+  --neutral-950: oklch(0.141 0.005 285.823); /* #09090B */
+  --brand-50: oklch(0.971 0.014 18); /* #FFF2F2 */
+  --brand-100: oklch(0.936 0.032 18); /* #FFE2E2 */
+  --brand-200: oklch(0.885 0.060 18); /* #FFCACA */
+  --brand-300: oklch(0.808 0.108 18); /* #FEA4A6 */
+  --brand-400: oklch(0.712 0.170 17); /* #FA6F7B */
+  --brand-500: oklch(0.618 0.215 17); /* #EA3455 */
+  --brand-600: oklch(0.540 0.216 17); /* #CE003E */
+  --brand-700: oklch(0.470 0.188 16); /* #AB0035 */
+  --brand-800: oklch(0.400 0.160 15); /* #89002A */
+  --brand-900: oklch(0.330 0.130 14); /* #680220 */
+  --brand-950: oklch(0.245 0.092 14); /* #420313 */
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-subtle-foreground: var(--success-subtle-foreground);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+  --color-warning-border: var(--warning-border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-error-subtle: var(--error-subtle);
+  --color-error-subtle-foreground: var(--error-subtle-foreground);
+  --color-error-border: var(--error-border);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-subtle-foreground: var(--info-subtle-foreground);
+  --color-info-border: var(--info-border);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+/* ---------------------------------------------------------------------------
+   Marketing layer (landing only)
+   --------------------------------------------------------------------------- */
+@theme inline {
+  --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), var(--font-text), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-heading: var(--font-display);
+
+  /* Marketing type scale (fluid, 390 → 1440) */
+  --text-display: clamp(4.25rem, 2.4rem + 8.6vw, 10rem);
+  --text-display--line-height: 0.86;
+  --text-display--letter-spacing: -0.01em;
+  --text-h2: clamp(2.5rem, 1.85rem + 2.8vw, 4.25rem);
+  --text-h2--line-height: 0.95;
+  --text-h2--letter-spacing: -0.005em;
+  --text-h3: 1.375rem;
+  --text-h3--line-height: 1.25;
+  --text-lead: clamp(1.125rem, 1.03rem + 0.4vw, 1.375rem);
+  --text-lead--line-height: 1.5;
+  --text-body: 1.0625rem;
+  --text-body--line-height: 1.6;
+  --text-eyebrow: 0.8125rem;
+  --text-eyebrow--line-height: 1.4;
+  --text-eyebrow--letter-spacing: 0.08em;
+
+  /* Layout */
+  --container-page: 75rem; /* 1200px content */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 1.5rem;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "kern", "calt";
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  .on-brand :focus-visible {
+    outline-color: #fff;
+  }
+  ::selection {
+    background: var(--neutral-900);
+    color: var(--neutral-50);
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility container-page {
+  width: 100%;
+  max-width: calc(var(--container-page) + 2 * var(--gutter, 1.25rem));
+  margin-inline: auto;
+  padding-inline: var(--gutter, 1.25rem);
+  @media (width >= 48rem) {
+    --gutter: 2rem;
+  }
+}
+
+@utility grid-page {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: 1rem;
+  @media (width >= 48rem) {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: 1.5rem;
+  }
+}
