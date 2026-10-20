@@ -180,6 +180,8 @@ export const ja = build({
       "「アプリケーション」から Vermut を開きます。Rosetta 2 がない場合は Vermut がインストールします。",
     ],
     gatekeeper: {
+      firstLaunch: "初回起動時は「システム設定」>「プライバシーとセキュリティ」を開き、「このまま開く」をクリックします（macOS Tahoe／Sequoia）。",
+      firstLaunchLink: "手順を見る",
       title: "初回起動：Vermut を一度だけ許可",
       why: "Vermut は有料の Apple Developer ID で署名されていない無料のオープンソースアプリのため、macOS が警告を表示します。",
       whySource: "ソースコード",

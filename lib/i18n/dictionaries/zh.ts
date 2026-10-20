@@ -180,6 +180,8 @@ export const zh = build({
       "从“应用程序”打开 Vermut。如果你的 Mac 缺少 Rosetta 2，Vermut 会为你安装。",
     ],
     gatekeeper: {
+      firstLaunch: "首次打开时，请前往“系统设置”>“隐私与安全”，点击“仍要打开”（macOS Tahoe 和 Sequoia）。",
+      firstLaunchLink: "查看步骤",
       title: "首次打开：允许 Vermut 一次",
       why: "Vermut 是免费开源应用，没有使用付费的 Apple Developer ID 签名，因此 macOS 会发出警告。你可以逐行阅读",
       whySource: "源代码",

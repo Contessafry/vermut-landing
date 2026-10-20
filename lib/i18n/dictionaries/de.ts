@@ -181,6 +181,8 @@ export const de = build({
       "Öffne Vermut aus »Programme«. Fehlt Rosetta 2 auf deinem Mac, installiert Vermut es für dich.",
     ],
     gatekeeper: {
+      firstLaunch: "Beim ersten Start öffne Systemeinstellungen > Datenschutz & Sicherheit und klicke auf „Dennoch öffnen“ (macOS Tahoe und Sequoia).",
+      firstLaunchLink: "So geht’s",
       title: "Erster Start: Vermut einmal erlauben",
       why: "macOS warnt dich, weil Vermut eine kostenlose Open-Source-App ist, die nicht mit einer kostenpflichtigen Apple Developer ID signiert ist. Du kannst jede Zeile des ",
       whySource: "Quellcodes",

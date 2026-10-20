@@ -16,7 +16,7 @@ const repoSlug = githubUrl.replace(/^https:\/\/github\.com\//, "");
 /**
  * Release / download details. `lib/release.ts` reads the latest GitHub release
  * at build time (revalidated hourly); these values are the fallback when the
- * API is unreachable. Facts from release v1.1.0 (20 Oct 2026); the download URL
+ * API is unreachable. Facts from release v1.1.1 (20 Oct 2026); the download URL
  * fallback is version-independent (releases/latest) so it always serves the newest build.
  */
 export const release = {
@@ -24,12 +24,12 @@ export const release = {
   apiUrl: `https://api.github.com/repos/${repoSlug}/releases/latest`,
   releasesUrl: `${githubUrl}/releases`,
   fallback: {
-    version: env("NEXT_PUBLIC_VERSION") ?? "1.1.0",
-    tag: "v1.1.0",
-    dmgName: env("NEXT_PUBLIC_DMG_NAME") ?? "Vermut-1.1.0.dmg",
+    version: env("NEXT_PUBLIC_VERSION") ?? "1.1.1",
+    tag: "v1.1.1",
+    dmgName: env("NEXT_PUBLIC_DMG_NAME") ?? "Vermut-1.1.1.dmg",
     dmgUrl: env("NEXT_PUBLIC_DOWNLOAD_URL") ?? `${githubUrl}/releases/latest`,
-    sizeBytes: Number(env("NEXT_PUBLIC_DMG_SIZE_BYTES") ?? 2088353),
-    sha256: env("NEXT_PUBLIC_DMG_SHA256") ?? "69c1c9256cdb60cc3682165dcf9919725b04bc4d740f5f97f0dbb7f2923fe348",
+    sizeBytes: Number(env("NEXT_PUBLIC_DMG_SIZE_BYTES") ?? 2072767),
+    sha256: env("NEXT_PUBLIC_DMG_SHA256") ?? "9a773654371d8ef869efb2941fd0325f3463599c6d1609682e01976f2d5b0168",
   },
   /** Releases are unsigned and not notarized today, so Gatekeeper steps are shown. */
   notarized: env("NEXT_PUBLIC_NOTARIZED") === "true",

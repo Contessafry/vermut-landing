@@ -298,6 +298,8 @@ export const en = {
       "Open Vermut from Applications. If your Mac doesn't have Rosetta 2 yet, Vermut installs it for you.",
     ],
     gatekeeper: {
+      firstLaunch: "On first launch, open System Settings > Privacy & Security and click “Open Anyway” (macOS Tahoe and Sequoia).",
+      firstLaunchLink: "How it works",
       title: "First launch: allow Vermut once",
       why: "macOS warns you because Vermut is a free, open-source app that isn't signed with a paid Apple Developer ID. You can read every line of the ",
       whySource: "source code",

@@ -32,6 +32,14 @@ export async function Download() {
             <ArrowDownToLine className="size-5" aria-hidden="true" />
             {s.primaryLabel(r.version)}
           </a>
+          {cfg.notarized ? null : (
+            <p className="mt-3 max-w-md text-[0.8125rem] leading-5 text-muted-foreground text-pretty">
+              {g.firstLaunch}{" "}
+              <a href="#first-launch" className="font-medium text-foreground underline underline-offset-[3px]">
+                {g.firstLaunchLink}
+              </a>
+            </p>
+          )}
           <dl className="mt-8 flex flex-col border-b">
             {facts.map((f) => (
               <div key={f.label} className="grid grid-cols-[6.5rem_1fr] gap-3 border-t py-3">
@@ -75,7 +83,7 @@ export async function Download() {
             ))}
           </ol>
           {cfg.notarized ? null : (
-            <div className="mt-8 rounded-xl border bg-neutral-100/70 p-6">
+            <div id="first-launch" className="mt-8 scroll-mt-8 rounded-xl border bg-neutral-100/70 p-6">
               <h3 className="text-[1.0625rem] font-semibold">{g.title}</h3>
               <p className="mt-2 text-[0.9375rem] text-muted-foreground text-pretty">
                 {g.why}
