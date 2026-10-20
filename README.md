@@ -49,9 +49,9 @@ tag, and the SHA-256 parsed from the release notes. The values below are only th
 | --- | --- | --- |
 | `NEXT_PUBLIC_SITE_URL` | Production origin (canonical, OG, sitemap, robots, llms.txt) | Vercel production domain, else `https://vermut.example` |
 | `NEXT_PUBLIC_GITHUB_URL` | App source repo | `https://github.com/Contessafry/Vermut` |
-| `NEXT_PUBLIC_VERSION` | Fallback version | `1.1.1` |
-| `NEXT_PUBLIC_DMG_NAME` / `NEXT_PUBLIC_DOWNLOAD_URL` | Fallback DMG name / URL | `Vermut-1.1.1.dmg` / `releases/latest` |
-| `NEXT_PUBLIC_DMG_SIZE_BYTES` / `NEXT_PUBLIC_DMG_SHA256` | Fallback size / checksum | v1.1.1 values |
+| `NEXT_PUBLIC_VERSION` | Fallback version | `1.1.2` |
+| `NEXT_PUBLIC_DMG_NAME` / `NEXT_PUBLIC_DOWNLOAD_URL` | Fallback DMG name / URL | `Vermut-1.1.2.dmg` / `releases/latest` |
+| `NEXT_PUBLIC_DMG_SIZE_BYTES` / `NEXT_PUBLIC_DMG_SHA256` | Fallback size / checksum | v1.1.2 values |
 | `NEXT_PUBLIC_NOTARIZED` | `true` hides the Gatekeeper first-launch steps | `false` |
 | `NEXT_PUBLIC_BREW_CASK` | Homebrew cask token; shows `brew install --cask …` | empty (hidden) |
 | `NEXT_PUBLIC_INSTALL_SCRIPT_URL` | One-line installer script | `raw.githubusercontent.com/Contessafry/Vermut/main/install.sh` |

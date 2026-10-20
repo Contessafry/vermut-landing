@@ -181,7 +181,7 @@ export const fr = build({
       "Ouvrez Vermut depuis Applications. Si Rosetta 2 manque sur votre Mac, Vermut l’installe pour vous.",
     ],
     gatekeeper: {
-      firstLaunch: "Au premier lancement, ouvrez Réglages Système > Confidentialité et sécurité et cliquez sur « Ouvrir quand même » (macOS Tahoe et Sequoia).",
+      firstLaunch: "Au premier lancement, ouvrez Réglages Système > Confidentialité et sécurité, cliquez sur « Ouvrir quand même » et confirmez avec Touch ID ou votre mot de passe.",
       firstLaunchLink: "Voir comment",
       title: "Premier lancement : autorisez Vermut une fois",
       why: "macOS vous avertit car Vermut est une app gratuite et open source, non signée avec un Apple Developer ID payant. Vous pouvez lire chaque ligne du ",
@@ -190,10 +190,10 @@ export const fr = build({
       whySha: "SHA-256",
       whyEnd: ".",
       steps: [
-        { title: "Ouvrez Vermut", body: "Double-cliquez sur Vermut dans Applications. macOS affiche « Vermut » n’a pas été ouvert. Cliquez sur Terminé, pas sur Placer dans la corbeille." },
-        { title: "Ouvrez Confidentialité et sécurité", body: "Choisissez le menu Pomme › Réglages Système, cliquez sur Confidentialité et sécurité dans la barre latérale, puis faites défiler jusqu’à Sécurité." },
-        { title: "Cliquez sur Ouvrir quand même", body: "À côté du message concernant Vermut, cliquez sur Ouvrir quand même. Le bouton reste disponible environ une heure après l’étape 1." },
-        { title: "Confirmez", body: "Cliquez sur Ouvrir, puis confirmez avec votre mot de passe d’ouverture de session ou Touch ID. macOS retient ce choix : vous ne le faites qu’une fois." },
+        { title: "Ouvrez Vermut, puis cliquez sur Terminé", body: "Double-cliquez sur Vermut dans Applications. macOS affiche « Vermut » n’a pas été ouvert. Cliquez sur Terminé, pas sur Placer dans la corbeille." },
+        { title: "Cliquez sur Ouvrir quand même dans Confidentialité et sécurité", body: "Choisissez le menu Pomme › Réglages Système › Confidentialité et sécurité, faites défiler jusqu’à Sécurité et cliquez sur Ouvrir quand même à côté du message concernant Vermut. Le bouton reste disponible environ une heure après l’étape 1." },
+        { title: "Cliquez de nouveau sur Ouvrir quand même", body: "Une fenêtre de confirmation apparaît : cliquez sur Ouvrir quand même." },
+        { title: "Confirmez avec Touch ID ou votre mot de passe", body: "macOS peut demander Touch ID ou le mot de passe de votre Mac. C’est normal : confirmez simplement. macOS retient ce choix : vous ne le faites qu’une fois." },
       ],
       note: "Voici la marche à suivre sous macOS 15 Sequoia et ultérieur, où Contrôle-clic › Ouvrir ne contourne plus la vérification. Sous macOS 14 Sonoma, Contrôle-clic › Ouvrir fonctionne encore.",
       appleLabel: "Assistance Apple : Ouvrir une app Mac provenant d’un développeur inconnu",

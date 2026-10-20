@@ -180,7 +180,7 @@ export const es = build({
       "Abre Vermut desde Aplicaciones. Si a tu Mac le falta Rosetta 2, Vermut la instala por ti.",
     ],
     gatekeeper: {
-      firstLaunch: "En la primera apertura, abre Ajustes del Sistema > Privacidad y seguridad y haz clic en “Abrir igualmente” (macOS Tahoe y Sequoia).",
+      firstLaunch: "En la primera apertura, abre Ajustes del Sistema > Privacidad y seguridad, haz clic en “Abrir igualmente” y confirma con Touch ID o tu contraseña.",
       firstLaunchLink: "Cómo hacerlo",
       title: "Primera apertura: permite Vermut una vez",
       why: "macOS te avisa porque Vermut es una app gratuita y de código abierto que no está firmada con un Apple Developer ID de pago. Puedes leer cada línea del ",
@@ -189,10 +189,10 @@ export const es = build({
       whySha: "SHA-256",
       whyEnd: ".",
       steps: [
-        { title: "Abre Vermut", body: "Haz doble clic en Vermut en Aplicaciones. macOS muestra un aviso de que “Vermut” no se ha abierto. Haz clic en Aceptar, no en Trasladar a la papelera." },
-        { title: "Abre Privacidad y seguridad", body: "Selecciona menú Apple › Ajustes del Sistema, haz clic en Privacidad y seguridad en la barra lateral y desplázate hasta Seguridad." },
-        { title: "Haz clic en Abrir igualmente", body: "Junto al mensaje sobre Vermut, haz clic en Abrir igualmente. El botón está disponible durante una hora aproximadamente después del paso 1." },
-        { title: "Confirma", body: "Haz clic en Abrir y confirma con tu contraseña de inicio de sesión o Touch ID. macOS recuerda la decisión, así que solo lo haces una vez." },
+        { title: "Abre Vermut y haz clic en Aceptar", body: "Haz doble clic en Vermut en Aplicaciones. macOS muestra un aviso de que “Vermut” no se ha abierto. Haz clic en Aceptar, no en Trasladar a la papelera." },
+        { title: "Haz clic en Abrir igualmente en Privacidad y seguridad", body: "Selecciona menú Apple › Ajustes del Sistema › Privacidad y seguridad, desplázate hasta Seguridad y haz clic en Abrir igualmente junto al mensaje sobre Vermut. El botón está disponible durante una hora aproximadamente después del paso 1." },
+        { title: "Vuelve a hacer clic en Abrir igualmente", body: "Aparece un cuadro de confirmación: haz clic en Abrir igualmente." },
+        { title: "Confirma con Touch ID o tu contraseña", body: "macOS puede pedirte Touch ID o la contraseña del Mac. Es normal: solo confirma. macOS recuerda la decisión, así que solo lo haces una vez." },
       ],
       note: "Así funciona en macOS 15 Sequoia y posterior, donde Control + clic › Abrir ya no omite la comprobación. En macOS 14 Sonoma, Control + clic › Abrir sigue funcionando.",
       appleLabel: "Soporte de Apple: Abrir una app para Mac de un desarrollador desconocido",

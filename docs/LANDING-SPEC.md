@@ -219,7 +219,7 @@ These are the only values we don't know. All of them are in `site.config.ts` and
 | Site URL | `NEXT_PUBLIC_SITE_URL` (falls back to `VERCEL_PROJECT_PRODUCTION_URL`) | `https://vermut.example` |
 | GitHub URL | `NEXT_PUBLIC_GITHUB_URL` | `https://github.com/Contessafry/Vermut` |
 | Download URL | `NEXT_PUBLIC_DOWNLOAD_URL` | `{github}/releases/latest` |
-| Version | `NEXT_PUBLIC_VERSION` | `1.1.1` (latest release fallback; live value from the GitHub API) |
+| Version | `NEXT_PUBLIC_VERSION` | `1.1.2` (latest release fallback; live value from the GitHub API) |
 
 ## 16. Review checklist (run before every release)
 

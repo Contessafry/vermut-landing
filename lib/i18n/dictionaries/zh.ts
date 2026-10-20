@@ -180,7 +180,7 @@ export const zh = build({
       "从“应用程序”打开 Vermut。如果你的 Mac 缺少 Rosetta 2，Vermut 会为你安装。",
     ],
     gatekeeper: {
-      firstLaunch: "首次打开时，请前往“系统设置”>“隐私与安全”，点击“仍要打开”（macOS Tahoe 和 Sequoia）。",
+      firstLaunch: "首次打开时，请前往“系统设置”>“隐私与安全”，点击“仍要打开”，然后用触控 ID 或密码确认。",
       firstLaunchLink: "查看步骤",
       title: "首次打开：允许 Vermut 一次",
       why: "Vermut 是免费开源应用，没有使用付费的 Apple Developer ID 签名，因此 macOS 会发出警告。你可以逐行阅读",
@@ -189,10 +189,10 @@ export const zh = build({
       whySha: "SHA-256",
       whyEnd: " 校验下载文件。",
       steps: [
-        { title: "打开 Vermut", body: "在“应用程序”中连按 Vermut。macOS 会提示“Vermut”未打开。请点按“完成”，不要点按“移到废纸篓”。" },
-        { title: "打开“隐私与安全”", body: "选取苹果菜单 >“系统设置”，点按边栏中的“隐私与安全”，然后向下滚动到“安全性”。" },
-        { title: "点按“仍要打开”", body: "在关于 Vermut 的信息旁边，点按“仍要打开”。此按钮在第 1 步后约一小时内可用。" },
-        { title: "确认", body: "点按“打开”，然后输入登录密码或使用触控 ID 确认。macOS 会记住你的选择，只需操作一次。" },
+        { title: "打开 Vermut，然后点按“完成”", body: "在“应用程序”中连按 Vermut。macOS 会提示“Vermut”未打开。请点按“完成”，不要点按“移到废纸篓”。" },
+        { title: "在“隐私与安全”中点按“仍要打开”", body: "选取苹果菜单 >“系统设置”>“隐私与安全”，向下滚动到“安全性”，在关于 Vermut 的信息旁边点按“仍要打开”。此按钮在第 1 步后约一小时内可用。" },
+        { title: "再次点按“仍要打开”", body: "系统会显示确认对话框，请点按“仍要打开”。" },
+        { title: "使用触控 ID 或密码确认", body: "macOS 可能会要求使用触控 ID 或输入 Mac 密码。这是正常的，确认即可。macOS 会记住你的选择，只需操作一次。" },
       ],
       note: "以上是 macOS 15 Sequoia 及更高版本的步骤，在这些版本中按住 Control 键点按 ›“打开”已无法跳过检查。在 macOS 14 Sonoma 上，按住 Control 键点按 ›“打开”仍然有效。",
       appleLabel: "Apple 支持：打开来自未知开发者的 Mac App",

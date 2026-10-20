@@ -181,7 +181,7 @@ export const de = build({
       "Öffne Vermut aus »Programme«. Fehlt Rosetta 2 auf deinem Mac, installiert Vermut es für dich.",
     ],
     gatekeeper: {
-      firstLaunch: "Beim ersten Start öffne Systemeinstellungen > Datenschutz & Sicherheit und klicke auf „Dennoch öffnen“ (macOS Tahoe und Sequoia).",
+      firstLaunch: "Beim ersten Start öffne Systemeinstellungen > Datenschutz & Sicherheit, klicke auf „Dennoch öffnen“ und bestätige mit Touch ID oder Passwort.",
       firstLaunchLink: "So geht’s",
       title: "Erster Start: Vermut einmal erlauben",
       why: "macOS warnt dich, weil Vermut eine kostenlose Open-Source-App ist, die nicht mit einer kostenpflichtigen Apple Developer ID signiert ist. Du kannst jede Zeile des ",
@@ -190,10 +190,10 @@ export const de = build({
       whySha: "SHA-256",
       whyEnd: " prüfen.",
       steps: [
-        { title: "Vermut öffnen", body: "Doppelklicke in »Programme« auf Vermut. macOS zeigt »Vermut« wurde nicht geöffnet. Klicke auf »Fertig«, nicht auf »In den Papierkorb legen«." },
-        { title: "Datenschutz & Sicherheit öffnen", body: "Wähle Apple-Menü › »Systemeinstellungen«, klicke in der Seitenleiste auf »Datenschutz & Sicherheit« und scrolle nach unten zu »Sicherheit«." },
-        { title: "Auf »Dennoch öffnen« klicken", body: "Neben der Meldung zu Vermut klickst du auf »Dennoch öffnen«. Die Taste ist etwa eine Stunde nach Schritt 1 verfügbar." },
-        { title: "Bestätigen", body: "Klicke auf »Öffnen« und bestätige mit deinem Anmeldepasswort oder Touch ID. macOS merkt sich die Entscheidung, du machst das also nur einmal." },
+        { title: "Vermut öffnen, dann »Fertig«", body: "Doppelklicke in »Programme« auf Vermut. macOS zeigt »Vermut« wurde nicht geöffnet. Klicke auf »Fertig«, nicht auf »In den Papierkorb legen«." },
+        { title: "In Datenschutz & Sicherheit auf »Dennoch öffnen« klicken", body: "Wähle Apple-Menü › »Systemeinstellungen« › »Datenschutz & Sicherheit«, scrolle zu »Sicherheit« und klicke neben der Meldung zu Vermut auf »Dennoch öffnen«. Die Taste ist etwa eine Stunde nach Schritt 1 verfügbar." },
+        { title: "Erneut auf »Dennoch öffnen« klicken", body: "Ein Bestätigungsdialog erscheint. Klicke auf »Dennoch öffnen«." },
+        { title: "Mit Touch ID oder Passwort bestätigen", body: "macOS fragt eventuell nach Touch ID oder deinem Mac-Passwort. Das ist normal: einfach bestätigen. macOS merkt sich die Entscheidung, du machst das also nur einmal." },
       ],
       note: "So läuft es unter macOS 15 Sequoia und neuer, wo Control-Klick › Öffnen die Prüfung nicht mehr überspringt. Unter macOS 14 Sonoma funktioniert Control-Klick › Öffnen weiterhin.",
       appleLabel: "Apple Support: Öffnen einer Mac-App eines unbekannten Entwicklungsteams",

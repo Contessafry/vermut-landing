@@ -221,7 +221,7 @@ export const it = build({
       "Apri Vermut da Applicazioni. Se sul tuo Mac manca Rosetta 2, Vermut la installa per te.",
     ],
     gatekeeper: {
-      firstLaunch: "Al primo avvio apri Impostazioni di Sistema > Privacy e sicurezza e clicca “Apri comunque” (macOS Tahoe e Sequoia).",
+      firstLaunch: "Al primo avvio apri Impostazioni di Sistema > Privacy e sicurezza, clicca “Apri comunque” e conferma con Touch ID o password.",
       firstLaunchLink: "Come fare",
       title: "Primo avvio: autorizza Vermut una volta",
       why: "macOS mostra un avviso perché Vermut è un’app gratuita e open source, non firmata con un Apple Developer ID a pagamento. Puoi leggere ogni riga del ",
@@ -230,10 +230,10 @@ export const it = build({
       whySha: "SHA-256",
       whyEnd: ".",
       steps: [
-        { title: "Apri Vermut", body: "Fai doppio clic su Vermut in Applicazioni. macOS mostra l’avviso “Vermut” non è stato aperto: fai clic su Fine, non su Sposta nel Cestino." },
-        { title: "Vai in Privacy e sicurezza", body: "Scegli menu Apple › Impostazioni di Sistema, fai clic su Privacy e sicurezza nella barra laterale, poi scorri fino a Sicurezza." },
-        { title: "Fai clic su Apri comunque", body: "Accanto al messaggio “Vermut” è stato bloccato per proteggere il Mac, fai clic su Apri comunque. Il pulsante resta disponibile per circa un’ora dopo il passo 1." },
-        { title: "Conferma", body: "Fai clic su Apri, poi conferma con la password di login o con Touch ID. macOS ricorda la scelta: lo fai una volta sola." },
+        { title: "Apri Vermut e fai clic su Fine", body: "Fai doppio clic su Vermut in Applicazioni. macOS mostra l’avviso “Vermut” non è stato aperto: fai clic su Fine, non su Sposta nel Cestino." },
+        { title: "Fai clic su Apri comunque in Privacy e sicurezza", body: "Scegli menu Apple › Impostazioni di Sistema › Privacy e sicurezza, scorri fino a Sicurezza e fai clic su Apri comunque accanto al messaggio su Vermut. Il pulsante resta disponibile per circa un’ora dopo il passo 1." },
+        { title: "Fai di nuovo clic su Apri comunque", body: "Compare una finestra di conferma: fai clic su Apri comunque." },
+        { title: "Conferma con Touch ID o password", body: "macOS può chiederti Touch ID o la password del Mac. È normale: conferma e basta. macOS ricorda la scelta, quindi lo fai una volta sola." },
       ],
       note: "Questa è la procedura su macOS 15 Sequoia e successivi, dove Ctrl-clic › Apri non salta più il controllo. Su macOS 14 Sonoma, Ctrl-clic › Apri funziona ancora.",
       appleLabel: "Supporto Apple: Aprire un’app Mac di un’azienda di sviluppo sconosciuta",

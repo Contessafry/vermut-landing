@@ -298,7 +298,7 @@ export const en = {
       "Open Vermut from Applications. If your Mac doesn't have Rosetta 2 yet, Vermut installs it for you.",
     ],
     gatekeeper: {
-      firstLaunch: "On first launch, open System Settings > Privacy & Security and click “Open Anyway” (macOS Tahoe and Sequoia).",
+      firstLaunch: "On first launch, open System Settings > Privacy & Security, click “Open Anyway” and confirm with Touch ID or your password.",
       firstLaunchLink: "How it works",
       title: "First launch: allow Vermut once",
       why: "macOS warns you because Vermut is a free, open-source app that isn't signed with a paid Apple Developer ID. You can read every line of the ",
@@ -307,10 +307,10 @@ export const en = {
       whySha: "SHA-256",
       whyEnd: ".",
       steps: [
-        { title: "Open Vermut", body: "Double-click Vermut in Applications. macOS shows “Vermut” Not Opened. Click Done, not Move to Trash." },
-        { title: "Open Privacy & Security", body: "Choose Apple menu › System Settings, click Privacy & Security in the sidebar, then scroll down to Security." },
-        { title: "Click Open Anyway", body: "Next to “Vermut” was blocked to protect your Mac, click Open Anyway. The button appears for about an hour after step 1." },
-        { title: "Confirm", body: "Click Open, then confirm with your password or Touch ID. macOS remembers the choice, so you only do this once." },
+        { title: "Open Vermut, then click Done", body: "Double-click Vermut in Applications. macOS shows “Vermut” Not Opened. Click Done, not Move to Trash." },
+        { title: "Click Open Anyway in Privacy & Security", body: "Choose Apple menu › System Settings › Privacy & Security, scroll down to Security and click Open Anyway next to the message about Vermut. The button appears for about an hour after step 1." },
+        { title: "Click Open Anyway again", body: "A confirmation dialog appears. Click Open Anyway." },
+        { title: "Confirm with Touch ID or your password", body: "macOS may ask for Touch ID or your Mac password. That’s normal: just confirm. macOS remembers the choice, so you only do this once." },
       ],
       note: "This is the flow on macOS 15 Sequoia and later, where Control-click › Open no longer skips the check. On macOS 14 Sonoma, Control-click › Open still works.",
       appleLabel: "Apple Support: Open a Mac app from an unknown developer",
