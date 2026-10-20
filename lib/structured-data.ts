@@ -27,8 +27,9 @@ export async function jsonLdGraph(locale: Locale) {
       {
         "@type": "WebSite",
         "@id": `${site.url}/#website`,
-        url: site.url,
+        url: `${site.url}/`,
         name: "Vermut",
+        alternateName: "Vermut for Mac",
         inLanguage: Object.values(localeInfo).map((i) => i.hreflang),
         publisher: { "@id": org },
       },
