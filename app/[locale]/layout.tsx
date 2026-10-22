@@ -5,7 +5,6 @@ import { LocaleSuggest } from "@/components/locale-suggest";
 import { fontVars } from "@/lib/fonts";
 import { getDictionaryFor } from "@/lib/i18n";
 import { hasLocale, languageAlternates, localeInfo, localePath, locales, type Locale } from "@/lib/i18n/config";
-import { jsonLdGraph } from "@/lib/structured-data";
 import { site, verification } from "@/site.config";
 import "../globals.css";
 
@@ -70,11 +69,6 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
         {children}
         <Analytics />
         <LocaleSuggest current={locale as Locale} options={suggestOptions()} />
-        <script
-          type="application/ld+json"
-          // Static, server-generated JSON-LD; `<` escaped.
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(await jsonLdGraph(locale)).replace(/</g, "\\u003c") }}
-        />
       </body>
     </html>
   );
