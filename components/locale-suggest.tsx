@@ -33,8 +33,12 @@ export function LocaleSuggest({ current, options }: { current: string; options: 
     for (const tag of navigator.languages ?? [navigator.language]) {
       const l = match(tag, supported);
       if (!l) continue;
+      const o = options.find((x) => x.locale === l);
+      // Same page in the suggested locale: swap the locale prefix of the current path.
+      const rest = current === "en" ? location.pathname : location.pathname.replace(new RegExp(`^/${current}(?=/|$)`), "");
+      const href = rest === "/" || rest === "" ? o?.href : `${l === "en" ? "" : `/${l}`}${rest}`;
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of browser-only state
-      if (l !== current) setOpt(options.find((o) => o.locale === l) ?? null);
+      if (l !== current && o) setOpt({ ...o, href: href ?? o.href });
       return;
     }
   }, [current, options]);

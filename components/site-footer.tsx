@@ -1,19 +1,21 @@
 import { ArrowDownToLine } from "lucide-react";
 import { getDictionary, getLocale } from "@/lib/i18n";
-import { localePath } from "@/lib/i18n/config";
-import { guides } from "@/lib/guides";
+import { localePath, type Locale } from "@/lib/i18n/config";
+import { guideHref, loadGuides } from "@/lib/guides";
 import { getRelease } from "@/lib/release";
 import { LanguageSwitcher } from "./language-switcher";
 import { site } from "@/site.config";
 
-export async function SiteFooter() {
+/** `path` maps a locale to the same page in that locale (language list); default is each locale's home. */
+export async function SiteFooter({ path }: { path?: (l: Locale) => string } = {}) {
   const [content, locale] = await Promise.all([getDictionary(), getLocale()]);
+  const { ui, guides } = await loadGuides(locale);
   // Hash links point at home sections, so they work from guide pages too.
   const home = localePath(locale);
   const resolve = (href: string) => (href.startsWith("#") ? `${home}${href}` : href);
   const columns = [
     ...content.footer.columns.map((c) => ({ ...c, links: c.links.map((l) => ({ ...l, href: resolve(l.href) })) })),
-    { title: "Guides", lang: "en", links: [{ label: "All guides", href: "/guides" }, ...guides.map((g) => ({ label: g.label, href: `/${g.slug}` }))] },
+    { title: ui.guides, links: [{ label: ui.allGuides, href: guideHref(locale, "guides") }, ...guides.map((g) => ({ label: g.label, href: guideHref(locale, g.slug) }))] },
   ];
   const { version } = await getRelease();
   const f = content.footer;
@@ -37,7 +39,6 @@ export async function SiteFooter() {
           <nav
             key={col.title}
             aria-label={col.title}
-            lang={"lang" in col ? col.lang : undefined}
             className={i === 0 ? "col-span-2 md:col-span-4 lg:col-span-2 lg:col-start-5" : "col-span-2 md:col-span-4 lg:col-span-2"}
           >
             <h2 className="font-mono text-eyebrow uppercase text-neutral-400">{col.title}</h2>
@@ -52,7 +53,7 @@ export async function SiteFooter() {
             </ul>
           </nav>
         ))}
-        <LanguageSwitcher variant="list" className="col-span-2 md:col-span-4 lg:col-span-2" />
+        <LanguageSwitcher variant="list" path={path} className="col-span-2 md:col-span-4 lg:col-span-2" />
         <p className="col-span-full border-t border-white/10 pt-8 text-[0.8125rem] leading-relaxed text-neutral-400">
           {f.legal} <span className="whitespace-nowrap">{content.ui.version(version)}.</span>
         </p>

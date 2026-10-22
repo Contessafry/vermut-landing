@@ -3,50 +3,55 @@ import { ArrowDownToLine, ArrowRight, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getLocale } from "@/lib/i18n";
-import { getGuide, guides, guidesUpdated, type Guide, type GuideSection } from "@/lib/guides";
+import { localeInfo, locales, type Locale } from "@/lib/i18n/config";
+export { guideAlternates } from "@/lib/guides";
+import { guideAlternates, guideHref, guidesUpdated, homeHash, loadGuides, type Guide, type GuideSection, type GuideUi } from "@/lib/guides";
 import { plain } from "@/lib/structured-data";
 import { getRelease } from "@/lib/release";
 import { site } from "@/site.config";
 import { GitHubIcon } from "./icons";
+import { LanguageSwitcher } from "./language-switcher";
 import { RichText } from "./rich-text";
 import { SiteFooter } from "./site-footer";
 
-/** Guides are English only: one canonical URL, hreflang en + x-default. */
-export const guidePath = (slug: string) => `/${slug}`;
 const absolute = (path: string) => `${site.url}${path}`;
+const homeOf = (l: Locale) => (l === "en" ? "/" : `/${l}`);
 
-export function guideMetadata(slug: string): Metadata {
-  const g = getGuide(slug);
+export async function guideMetadata(locale: string, slug: string): Promise<Metadata> {
+  const l = toLocale(locale);
+  const { guides } = await loadGuides(l);
+  const g = guides.find((x) => x.slug === slug);
   if (!g) return {};
-  const path = guidePath(slug);
+  const path = guideHref(l, slug);
   return {
     title: g.metaTitle,
     description: g.description,
-    alternates: { canonical: path, languages: { en: path, "x-default": path } },
-    openGraph: { type: "article", url: path, siteName: "Vermut", title: g.metaTitle, description: g.description, locale: "en_US" },
+    alternates: { canonical: path, languages: guideAlternates(slug) },
+    openGraph: {
+      type: "article", url: path, siteName: "Vermut", title: g.metaTitle, description: g.description,
+      locale: localeInfo[l].og, alternateLocale: locales.filter((o) => o !== l).map((o) => localeInfo[o].og),
+    },
     twitter: { card: "summary_large_image", title: g.metaTitle, description: g.description },
   };
 }
 
-/** Guides exist only under the English segment; other locales 404. */
-export async function assertEnglish() {
-  if ((await getLocale()) !== "en") notFound();
-}
+const toLocale = (l: string): Locale => ((locales as readonly string[]).includes(l) ? (l as Locale) : "en");
 
-export function GuideHeader() {
+export function GuideHeader({ locale, ui, slug }: { locale: Locale; ui: GuideUi; slug: string }) {
   return (
     <header className="container-page relative z-10 flex h-18 items-center justify-between md:h-22">
-      <Link href="/" className="-m-2 rounded-md p-2" aria-label="Vermut home">
+      <Link href={homeOf(locale)} className="-m-2 rounded-md p-2" aria-label={ui.home}>
         {/* eslint-disable-next-line @next/next/no-img-element -- static SVG lockup */}
         <img src="/brand/vermut-lockup-white.svg" alt="" width={124} height={37} className="h-8 w-auto md:h-9" />
       </Link>
       <nav aria-label="Primary" className="flex items-center gap-1">
-        <Link href="/guides" className="rounded-md px-3 py-2 text-[0.9375rem] font-medium text-white/90 hover:bg-white/10 hover:text-white">
-          Guides
+        <Link href={guideHref(locale, "guides")} className="rounded-md px-3 py-2 text-[0.9375rem] font-medium text-white/90 hover:bg-white/10 hover:text-white">
+          {ui.guides}
         </Link>
-        <Link href="/#download" className="hidden rounded-md px-3 py-2 text-[0.9375rem] font-medium text-white/90 hover:bg-white/10 hover:text-white sm:inline-block">
-          Download
+        <Link href={homeHash(locale, "download")} className="hidden rounded-md px-3 py-2 text-[0.9375rem] font-medium text-white/90 hover:bg-white/10 hover:text-white sm:inline-block">
+          {ui.download}
         </Link>
+        <LanguageSwitcher variant="menu" className="ml-1" path={(l) => guideHref(l, slug)} />
         <a
           href={site.githubUrl}
           className="ml-1 inline-flex h-10 items-center gap-2 rounded-full border border-white/35 px-4 text-[0.9375rem] font-medium text-white transition-colors hover:border-white hover:bg-white/10"
@@ -74,7 +79,7 @@ function Breadcrumb({ items }: { items: { label: string; href?: string }[] }) {
   );
 }
 
-async function DownloadCta({ tone = "dark" }: { tone?: "dark" | "light" }) {
+async function DownloadCta({ tone = "dark", locale, ui }: { tone?: "dark" | "light"; locale: Locale; ui: GuideUi }) {
   const r = await getRelease();
   const btn =
     tone === "light"
@@ -84,10 +89,10 @@ async function DownloadCta({ tone = "dark" }: { tone?: "dark" | "light" }) {
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
       <a href={r.dmgUrl} className={`inline-flex h-13 items-center gap-2.5 rounded-full px-6 text-base font-semibold transition-colors ${btn}`}>
         <ArrowDownToLine className="size-5" aria-hidden="true" />
-        Download Vermut {r.version} (.dmg)
+        {ui.downloadLabel(r.version)}
       </a>
-      <Link href="/#first-launch" className={`text-[0.9375rem] font-medium underline underline-offset-[3px] ${tone === "light" ? "text-white" : "text-foreground"}`}>
-        First-launch guide
+      <Link href={homeHash(locale, "first-launch")} className={`text-[0.9375rem] font-medium underline underline-offset-[3px] ${tone === "light" ? "text-white" : "text-foreground"}`}>
+        {ui.firstLaunch}
       </Link>
     </div>
   );
@@ -130,8 +135,9 @@ function Section({ s }: { s: GuideSection }) {
   );
 }
 
-function guideJsonLd(g: Guide) {
-  const url = absolute(guidePath(g.slug));
+function guideJsonLd(g: Guide, l: Locale, ui: GuideUi) {
+  const url = absolute(guideHref(l, g.slug));
+  const inLanguage = localeInfo[l].hreflang;
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -140,7 +146,7 @@ function guideJsonLd(g: Guide) {
         "@id": `${url}#article`,
         headline: g.h1,
         description: g.description,
-        inLanguage: "en",
+        inLanguage,
         url,
         mainEntityOfPage: url,
         dateModified: guidesUpdated,
@@ -148,20 +154,20 @@ function guideJsonLd(g: Guide) {
         image: absolute("/opengraph-image.png"),
         author: { "@id": `${site.url}/#organization` },
         publisher: { "@id": `${site.url}/#organization` },
-        about: { "@type": "SoftwareApplication", name: "Vermut", operatingSystem: `macOS ${site.minMacOS} or later`, applicationCategory: "GameApplication", url: `${site.url}/` },
+        about: { "@type": "SoftwareApplication", name: "Vermut", operatingSystem: `macOS ${site.minMacOS} or later`, applicationCategory: "GameApplication", url: absolute(homeOf(l)) },
       },
       {
         "@type": "FAQPage",
         "@id": `${url}#faq`,
-        inLanguage: "en",
+        inLanguage,
         mainEntity: g.faq.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: plain(f.a) } })),
       },
       {
         "@type": "BreadcrumbList",
         "@id": `${url}#breadcrumb`,
         itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Vermut", item: `${site.url}/` },
-          { "@type": "ListItem", position: 2, name: "Guides", item: absolute("/guides") },
+          { "@type": "ListItem", position: 1, name: "Vermut", item: absolute(homeOf(l)) },
+          { "@type": "ListItem", position: 2, name: ui.guides, item: absolute(guideHref(l, "guides")) },
           { "@type": "ListItem", position: 3, name: g.label, item: url },
         ],
       },
@@ -175,23 +181,24 @@ export const JsonLd = ({ data }: { data: unknown }) => (
 );
 
 export async function GuidePage({ slug }: { slug: string }) {
-  await assertEnglish();
-  const g = getGuide(slug);
+  const locale = await getLocale();
+  const { ui, guides } = await loadGuides(locale);
+  const g = guides.find((x) => x.slug === slug);
   if (!g) notFound();
   const others = guides.filter((o) => o.slug !== slug);
   return (
     <>
       <div id="top" className="on-brand bg-brand text-white">
-        <GuideHeader />
+        <GuideHeader locale={locale} ui={ui} slug={slug} />
         <div className="container-page grid-page pt-8 pb-16 md:pt-12 md:pb-24">
           <div className="col-span-full lg:col-span-9">
-            <Breadcrumb items={[{ label: "Vermut", href: "/" }, { label: "Guides", href: "/guides" }, { label: "Guide" }]} />
+            <Breadcrumb items={[{ label: "Vermut", href: homeOf(locale) }, { label: ui.guides, href: guideHref(locale, "guides") }, { label: ui.breadcrumbGuide }]} />
             <h1 className="mt-6 font-display text-h2 font-extrabold text-balance">{g.h1}</h1>
             <p className="mt-8 max-w-[62ch] text-lead text-white text-pretty">
               <RichText value={g.answer} />
             </p>
-            <div className="mt-10"><DownloadCta tone="light" /></div>
-            <p className="mt-6 font-mono text-eyebrow uppercase text-white/85">Updated 22 October 2026 · Apple Silicon · macOS {site.minMacOS}+</p>
+            <div className="mt-10"><DownloadCta tone="light" locale={locale} ui={ui} /></div>
+            <p className="mt-6 font-mono text-eyebrow uppercase text-white/85">{ui.updated}</p>
           </div>
         </div>
       </div>
@@ -203,7 +210,7 @@ export async function GuidePage({ slug }: { slug: string }) {
 
             {g.compare ? (
               <section aria-labelledby="compare-title">
-                <h2 id="compare-title" className="font-display text-[2rem] leading-[1.05] font-extrabold md:text-[2.5rem]">Compared honestly</h2>
+                <h2 id="compare-title" className="font-display text-[2rem] leading-[1.05] font-extrabold md:text-[2.5rem]">{ui.compared}</h2>
                 <div className="mt-6 overflow-x-auto rounded-xl border">
                   <table className="w-full min-w-[40rem] border-collapse text-left text-[0.9375rem]">
                     <caption className="px-4 pt-4 pb-2 text-left text-[0.8125rem] text-muted-foreground">{g.compare.caption}</caption>
@@ -232,7 +239,7 @@ export async function GuidePage({ slug }: { slug: string }) {
             {g.after?.map((s) => <Section key={s.id} s={s} />)}
 
             <section aria-labelledby="faq-title">
-              <h2 id="faq-title" className="font-display text-[2rem] leading-[1.05] font-extrabold md:text-[2.5rem]">Questions</h2>
+              <h2 id="faq-title" className="font-display text-[2rem] leading-[1.05] font-extrabold md:text-[2.5rem]">{ui.questions}</h2>
               <ul className="mt-6 border-b border-neutral-300">
                 {g.faq.map((item) => (
                   <li key={item.q} className="border-t border-neutral-300">
@@ -249,7 +256,7 @@ export async function GuidePage({ slug }: { slug: string }) {
             </section>
 
             <section aria-labelledby="sources-title">
-              <h2 id="sources-title" className="font-mono text-eyebrow uppercase text-muted-foreground">Sources, checked 22 October 2026</h2>
+              <h2 id="sources-title" className="font-mono text-eyebrow uppercase text-muted-foreground">{ui.sources}</h2>
               <ul className="mt-4 flex flex-col gap-2 text-[0.9375rem]">
                 {g.sources.map((s) => (
                   <li key={s.href}><RichText value={[{ text: s.label, href: s.href }]} /></li>
@@ -259,27 +266,27 @@ export async function GuidePage({ slug }: { slug: string }) {
           </article>
 
           <aside aria-labelledby="try-title" className="col-span-full self-start rounded-xl bg-neutral-950 p-7 text-white lg:sticky lg:top-8 lg:col-span-4">
-            <h2 id="try-title" className="font-display text-[2rem] leading-none font-extrabold">Try Vermut</h2>
-            <p className="mt-3 text-[0.9375rem] leading-relaxed text-neutral-300">Free and open source. Steam and Epic Games (beta) on Wine 11. Apple Silicon, macOS {site.minMacOS} or later.</p>
+            <h2 id="try-title" className="font-display text-[2rem] leading-none font-extrabold">{ui.tryTitle}</h2>
+            <p className="mt-3 text-[0.9375rem] leading-relaxed text-neutral-300">{ui.tryBody}</p>
             <p lang="en" className="mt-3 font-display text-[1.375rem] leading-none font-extrabold">{site.tagline}</p>
-            <div className="mt-6"><DownloadCta tone="light" /></div>
-            <h3 className="mt-8 font-mono text-eyebrow uppercase text-neutral-400">More guides</h3>
+            <div className="mt-6"><DownloadCta tone="light" locale={locale} ui={ui} /></div>
+            <h3 className="mt-8 font-mono text-eyebrow uppercase text-neutral-400">{ui.moreGuides}</h3>
             <ul className="mt-3 flex flex-col gap-2.5">
               {others.map((o) => (
                 <li key={o.slug}>
-                  <Link href={guidePath(o.slug)} className="inline-flex items-start gap-2 text-[0.9375rem] text-neutral-200 hover:text-white hover:underline">
+                  <Link href={guideHref(locale, o.slug)} className="inline-flex items-start gap-2 text-[0.9375rem] text-neutral-200 hover:text-white hover:underline">
                     <ArrowRight className="mt-1 size-4 shrink-0" aria-hidden="true" />
                     {o.label}
                   </Link>
                 </li>
               ))}
-              <li><Link href="/" className="inline-flex items-start gap-2 text-[0.9375rem] text-neutral-200 hover:text-white hover:underline"><ArrowRight className="mt-1 size-4 shrink-0" aria-hidden="true" />Vermut home</Link></li>
+              <li><Link href={homeOf(locale)} className="inline-flex items-start gap-2 text-[0.9375rem] text-neutral-200 hover:text-white hover:underline"><ArrowRight className="mt-1 size-4 shrink-0" aria-hidden="true" />{ui.home}</Link></li>
             </ul>
           </aside>
         </div>
       </main>
-      <SiteFooter />
-      <JsonLd data={guideJsonLd(g)} />
+      <SiteFooter path={(l) => guideHref(l, slug)} />
+      <JsonLd data={guideJsonLd(g, locale, ui)} />
     </>
   );
 }

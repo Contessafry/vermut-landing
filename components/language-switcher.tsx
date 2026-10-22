@@ -1,18 +1,27 @@
 import { Globe } from "lucide-react";
 import { getDictionary, getLocale } from "@/lib/i18n";
-import { localeInfo, localePath, locales } from "@/lib/i18n/config";
+import { localeInfo, localePath, locales, type Locale } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
 
 /**
  * Plain links (crawlable, no JS). `variant="menu"` wraps them in a native
  * <details> disclosure for the header; `variant="list"` is the footer list.
  */
-export async function LanguageSwitcher({ variant, className }: { variant: "menu" | "list"; className?: string }) {
+export async function LanguageSwitcher({
+  variant,
+  className,
+  path = localePath,
+}: {
+  variant: "menu" | "list";
+  className?: string;
+  /** Same page in another locale (e.g. a guide); defaults to that locale's home. */
+  path?: (l: Locale) => string;
+}) {
   const [t, current] = await Promise.all([getDictionary(), getLocale()]);
   const items = locales.map((l) => (
     <li key={l}>
       <a
-        href={localePath(l)}
+        href={path(l)}
         hrefLang={localeInfo[l].htmlLang}
         lang={localeInfo[l].htmlLang}
         aria-current={l === current ? "page" : undefined}
