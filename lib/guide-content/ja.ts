@@ -1,5 +1,6 @@
 import type { Guide, GuideUi } from "@/lib/guides";
 import { S } from "@/lib/guides";
+import { guides as more } from "./ja-more";
 import { links } from "@/site.config";
 
 const FIRST_LAUNCH = "/ja#first-launch";
@@ -30,12 +31,12 @@ export const ui: GuideUi = {
     metaTitle: "ガイド：M1/M2/M3 Mac で Windows ゲームを遊ぶ方法",
     eyebrow: "ガイド",
     h1: "Mac で Windows ゲーム。正直に解説します。",
-    description: "Apple Silicon の Mac で Windows ゲームを遊ぶための実用的で正直なガイド。Wine で Steam を動かす方法、Whisky の代わり、CrossOver を使わない方法。",
+    description: "Apple Silicon の Mac で Windows ゲームを遊ぶための実用的で正直なガイド。Wine で Steam と Epic を動かす方法、DirectX 12、初回起動、Whisky の代わり、CrossOver を使わない方法。",
     back: "Vermut に戻る",
   },
 };
 
-export const guides: readonly Guide[] = [
+const guides1: readonly Guide[] = [
   {
     slug: "run-windows-steam-games-on-apple-silicon",
     label: "Apple Silicon Mac で Windows 版 Steam ゲーム",
@@ -264,3 +265,5 @@ export const guides: readonly Guide[] = [
     sources: [S.cxStore, S.cxLicence, S.cx26, S.gptk, S.gptkReq, S.parallels, S.gfn, S.aacy, S.cxCompat, S.vermut],
   },
 ];
+
+export const guides: readonly Guide[] = [...guides1, ...more];

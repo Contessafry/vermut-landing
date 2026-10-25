@@ -6,6 +6,11 @@ const GUIDE_SLUGS = [
   "run-windows-steam-games-on-apple-silicon",
   "free-whisky-alternative-mac",
   "run-windows-games-on-mac-without-crossover",
+  "install-wine-on-mac-apple-silicon",
+  "epic-games-windows-games-on-mac",
+  "directx-12-games-on-mac-d3dmetal",
+  "open-anyway-unnotarized-app-mac",
+  "wine-bottles-and-game-settings-mac",
 ];
 
 const nextConfig: NextConfig = {

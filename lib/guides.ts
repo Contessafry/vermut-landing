@@ -7,7 +7,7 @@ import type { Rich } from "@/lib/i18n/types";
 import { localeInfo, locales, type Locale } from "@/lib/i18n/config";
 import { links } from "@/site.config";
 
-export const guidesUpdated = "2026-10-22";
+export const guidesUpdated = "2026-10-25";
 
 export type GuideSection = {
   id: string;
@@ -55,6 +55,16 @@ export const S = {
   cxCompat: { label: "CodeWeavers compatibility database", href: "https://www.codeweavers.com/compatibility" },
   legendary: { label: "Legendary, an open-source Epic Games client", href: "https://github.com/derrod/legendary" },
   vermut: { label: "Vermut source code (MIT)", href: links.github },
+  vermutRelease: { label: "Vermut 1.2.0 release notes", href: "https://github.com/Contessafry/Vermut/releases/tag/v1.2.0" },
+  appleOpenAnyway: { label: "Apple Support: Open a Mac app from an unknown developer", href: "https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac" },
+  appleSafely: { label: "Apple Support: Safely open apps on your Mac", href: "https://support.apple.com/en-us/102445" },
+  appleSequoia: { label: "Apple Developer: Updates to runtime protection in macOS Sequoia", href: "https://developer.apple.com/news/?id=saqachfa" },
+  brewWine: { label: "Homebrew: wine-stable cask (disabled 1 September 2026)", href: "https://formulae.brew.sh/cask/wine-stable" },
+  gcenxWine: { label: "Gcenx/macOS_Wine_builds on GitHub", href: "https://github.com/Gcenx/macOS_Wine_builds" },
+  winehq: { label: "WineHQ: macOS", href: "https://wiki.winehq.org/MacOS" },
+  dxmt: { label: "DXMT on GitHub (DirectX 10/11 to Metal)", href: "https://github.com/3Shain/dxmt" },
+  gptkDownload: { label: "Apple Developer downloads: Game Porting Toolkit", href: "https://developer.apple.com/download/all/?q=game%20porting%20toolkit" },
+  epicMac: { label: "Epic Games Store: download and system requirements", href: "https://store.epicgames.com/download" },
 } as const;
 
 
@@ -85,6 +95,11 @@ export const guideSlugs = [
   "run-windows-steam-games-on-apple-silicon",
   "free-whisky-alternative-mac",
   "run-windows-games-on-mac-without-crossover",
+  "install-wine-on-mac-apple-silicon",
+  "epic-games-windows-games-on-mac",
+  "directx-12-games-on-mac-d3dmetal",
+  "open-anyway-unnotarized-app-mac",
+  "wine-bottles-and-game-settings-mac",
 ] as const;
 
 /** Public path: "/<slug>" for English, "/<locale>/<slug>" otherwise. "" slug = hub "guides". */

@@ -1,5 +1,6 @@
 import type { Guide, GuideUi } from "@/lib/guides";
 import { S } from "@/lib/guides";
+import { guides as more } from "./es-more";
 import { links } from "@/site.config";
 
 const FIRST_LAUNCH = "/es#first-launch";
@@ -30,12 +31,12 @@ export const ui: GuideUi = {
     metaTitle: "Guías: jugar juegos de Windows en Mac con Apple Silicon",
     eyebrow: "Guías",
     h1: "Juegos de Windows en tu Mac, explicados con honestidad.",
-    description: "Guías prácticas y honestas para jugar juegos de Windows en Mac con Apple Silicon: Steam con Wine, alternativas a Whisky y opciones sin CrossOver.",
+    description: "Guías prácticas y honestas para jugar juegos de Windows en Mac con Apple Silicon: Steam y Epic con Wine, DirectX 12, primera apertura, alternativas a Whisky y opciones sin CrossOver.",
     back: "Volver a Vermut",
   },
 };
 
-export const guides: readonly Guide[] = [
+const guides1: readonly Guide[] = [
   {
     slug: "run-windows-steam-games-on-apple-silicon",
     label: "Juegos de Steam para Windows en Mac con Apple Silicon",
@@ -264,3 +265,5 @@ export const guides: readonly Guide[] = [
     sources: [S.cxStore, S.cxLicence, S.cx26, S.gptk, S.gptkReq, S.parallels, S.gfn, S.aacy, S.cxCompat, S.vermut],
   },
 ];
+
+export const guides: readonly Guide[] = [...guides1, ...more];

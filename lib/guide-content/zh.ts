@@ -1,5 +1,6 @@
 import type { Guide, GuideUi } from "@/lib/guides";
 import { S } from "@/lib/guides";
+import { guides as more } from "./zh-more";
 import { links } from "@/site.config";
 
 const FIRST_LAUNCH = "/zh#first-launch";
@@ -30,12 +31,12 @@ export const ui: GuideUi = {
     metaTitle: "指南：在苹果芯片 Mac 上玩 Windows 游戏",
     eyebrow: "指南",
     h1: "在 Mac 上玩 Windows 游戏，实话实说。",
-    description: "实用、坦诚的指南，教你在 Apple 芯片 Mac 上玩 Windows 游戏：用 Wine 运行 Steam、Whisky 的替代品，以及不用 CrossOver 的方法。",
+    description: "实用、坦诚的指南，教你在 Apple 芯片 Mac 上玩 Windows 游戏：用 Wine 运行 Steam 和 Epic、DirectX 12、首次打开、Whisky 的替代品，以及不用 CrossOver 的方法。",
     back: "返回 Vermut",
   },
 };
 
-export const guides: readonly Guide[] = [
+const guides1: readonly Guide[] = [
   {
     slug: "run-windows-steam-games-on-apple-silicon",
     label: "在苹果芯片 Mac 上运行 Windows 版 Steam 游戏",
@@ -264,3 +265,5 @@ export const guides: readonly Guide[] = [
     sources: [S.cxStore, S.cxLicence, S.cx26, S.gptk, S.gptkReq, S.parallels, S.gfn, S.aacy, S.cxCompat, S.vermut],
   },
 ];
+
+export const guides: readonly Guide[] = [...guides1, ...more];
