@@ -23,7 +23,7 @@ export const en = {
   hero: {
     eyebrow: "Free · Open source · Apple Silicon",
     title: ["Pour.", "Click.", "Play."] as const,
-    lead: "Vermut installs Steam and GOG Galaxy on your Mac, adds your Epic Games library (beta), and sets up Wine for each, so your Windows games launch with a click.",
+    lead: "Vermut installs Steam on your Mac, adds your Epic Games library (beta), and sets up Wine for each, so your Windows games launch with a click.",
     primary: { label: "Download for Mac", href: links.downloadSection },
     secondary: { label: "Star on GitHub", href: links.github },
     /** The live release version is prepended by the Hero component. */
@@ -46,7 +46,7 @@ export const en = {
         id: "pick",
         number: "01",
         title: "Pick a store",
-        body: "Choose Steam, GOG Galaxy or Epic Games (beta). Steam and GOG get their official installers; Epic runs through the open-source Legendary client, with no Epic launcher. Each store gets its own bottle, so they never get in each other's way.",
+        body: "Choose Steam or Epic Games (beta); GOG Galaxy is coming soon. Steam gets its official installer; Epic runs through the open-source Legendary client, with no Epic launcher. Each store gets its own bottle, so they never get in each other's way.",
         video: {
           mp4: "/videos/step-1.mp4",
           webm: "/videos/step-1.webm",
@@ -61,7 +61,7 @@ export const en = {
         id: "wine",
         number: "02",
         title: "Vermut sets up Wine",
-        body: "Each bottle gets Wine 11 and the graphics layer that suits its store: DXMT for Steam, DXVK for Epic, WineD3D for GOG. You can change it later. You don't have to.",
+        body: "Each bottle gets Wine 11 and a graphics layer: DXMT by default, with DXVK, WineD3D and D3DMetal available. You can change it later. You don't have to.",
         video: {
           mp4: "/videos/step-2.mp4",
           webm: "/videos/step-2.webm",
@@ -102,7 +102,7 @@ export const en = {
         items: [
           ["DirectX 9, 10 and 11 games, translated to Metal by DXMT or DXVK."],
           ["Indie and older titles, which are often the easiest wins."],
-          ["The Steam and GOG Galaxy clients themselves, plus your Epic Games library through Legendary (beta)."],
+          ["The Steam client itself, plus your Epic Games library through Legendary (beta). GOG Galaxy is coming soon."],
         ],
       },
       {
@@ -170,9 +170,9 @@ export const en = {
         ],
       },
       {
-        label: "Sets up Steam, Epic and GOG for you",
+        label: "Sets up Steam and Epic for you",
         cells: [
-          { value: "Yes", note: "Steam and GOG in their own bottles; Epic (beta) via Legendary, no Epic launcher", tone: "yes" },
+          { value: "Yes", note: "Steam in its own bottle; Epic (beta) via Legendary, no Epic launcher; GOG coming soon", tone: "yes" },
           { value: "No", note: "You create a bottle and run each installer", tone: "no" },
           { value: "Yes", note: "From its install catalogue; Epic and GOG since CrossOver 25 [9][10]", tone: "yes" },
           { value: "Epic, GOG, Amazon", note: "Its own launcher; no Steam client [6]", tone: "neutral" },
@@ -240,7 +240,7 @@ export const en = {
     share: {
       title: "Share Vermut",
       body: "Know someone who games on a Mac? Send them the link.",
-      text: "Vermut: play Windows games on your Mac with Steam, GOG and Epic. Free and open source.",
+      text: "Vermut: play Windows games on your Mac with Steam and Epic. Free and open source.",
     },
   },
 
@@ -253,7 +253,7 @@ export const en = {
       { q: "Does it work on Intel Macs?", a: ["No. Vermut is built for Apple Silicon: M1 and every chip since."] },
       { q: "Which version of macOS do I need?", a: [`macOS ${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later.`] },
       { q: "Will my game run?", a: ["It depends on the game. Most DirectX 9 to 11 games do; games with kernel-level anti-cheat don't. See ", { text: "compatibility", href: "#compatibility" }, " for the full picture."] },
-      { q: "Does Vermut see my Steam or Epic password?", a: ["No. For Steam and GOG you sign in inside the official store app, running in its own bottle. For Epic (beta) you sign in on Epic's own login page, and Legendary keeps the session on your Mac."] },
+      { q: "Does Vermut see my Steam or Epic password?", a: ["No. For Steam you sign in inside the official Steam app, running in its own bottle. For Epic (beta) you sign in on Epic's own login page, and Legendary keeps the session on your Mac."] },
       { q: "Does Vermut install the Epic Games Launcher?", a: ["No. Epic support is in beta and uses ", { text: "Legendary", href: "https://github.com/derrod/legendary" }, ", an open-source Epic client: sign in, see your library, install and launch games, without the Epic Games Launcher."] },
       { q: "Does it include Apple's Game Porting Toolkit?", a: ["No, Vermut never bundles it. If you install it yourself, Vermut detects it and offers D3DMetal as a graphics option."] },
       {
@@ -352,14 +352,13 @@ export const en = {
   },
 
   seo: {
-  title: "Vermut: play Windows games on your Mac with Steam, GOG and Epic",
+  title: "Vermut: play Windows games on your Mac with Steam and Epic",
   description:
-    "Free, open-source launcher for Apple Silicon Macs. Vermut installs Steam and GOG Galaxy, adds Epic Games (beta), sets up Wine and runs your Windows games.",
+    "Free, open-source launcher for Apple Silicon Macs. Vermut installs Steam, adds Epic Games (beta), sets up Wine and runs your Windows games.",
   keywords: [
     "play Windows games on Mac",
     "Steam on Mac Apple Silicon",
     "Epic Games on Mac",
-    "GOG Galaxy on Mac",
     "Wine for macOS",
     "Whisky alternative",
     "CrossOver alternative",

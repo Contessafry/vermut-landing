@@ -25,7 +25,7 @@ export async function llmsTxt() {
 
 > ${seo.description}
 
-Vermut is a native macOS app (MIT licence, version ${r.version}). It installs Steam and GOG Galaxy with their official installers and adds Epic Games in beta through the open-source Legendary client (no Epic Games Launcher). It gives each store its own Wine bottle with Wine 11 and a graphics layer (DXMT, DXVK or WineD3D; D3DMetal if Apple's Game Porting Toolkit is installed). Requirements: ${req}. Games with kernel-level anti-cheat do not run. The app is not signed with an Apple Developer ID or notarized, so on first launch macOS asks you to allow it once in System Settings › Privacy & Security. Last updated ${contentUpdated}.
+Vermut is a native macOS app (MIT licence, version ${r.version}). It installs Steam with its official installer (GOG Galaxy is coming soon) and adds Epic Games in beta through the open-source Legendary client (no Epic Games Launcher). It gives each store its own Wine bottle with Wine 11 and a graphics layer (DXMT, DXVK or WineD3D; D3DMetal if Apple's Game Porting Toolkit is installed). Requirements: ${req}. Games with kernel-level anti-cheat do not run. The app is not signed with an Apple Developer ID or notarized, so on first launch macOS asks you to allow it once in System Settings › Privacy & Security. Last updated ${contentUpdated}.
 
 ## Download
 ${downloadLines(r)}

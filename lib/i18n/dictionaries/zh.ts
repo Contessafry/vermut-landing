@@ -10,15 +10,15 @@ const macos = "macOS 14 Sonoma 或更高版本";
 export const zh = build({
   locale: "zh",
   seo: {
-    title: "Vermut：在 Mac 上用 Steam、GOG 和 Epic 玩 Windows 游戏",
+    title: "Vermut：在 Mac 上用 Steam 和 Epic 玩 Windows 游戏",
     description:
-      "适用于 Apple 芯片 Mac 的免费开源启动器。Vermut 安装 Steam 和 GOG Galaxy，添加 Epic Games（测试版），配置 Wine，并启动你的 Windows 游戏。",
-    keywords: ["Mac 玩 Windows 游戏", "Steam Mac Apple 芯片", "Epic Games Mac", "GOG Galaxy Mac", "Wine macOS", "Whisky 替代", "CrossOver 替代", "免费开源 Mac 游戏启动器", "Vermut"],
+      "适用于 Apple 芯片 Mac 的免费开源启动器。Vermut 安装 Steam，添加 Epic Games（测试版），配置 Wine，并启动你的 Windows 游戏。",
+    keywords: ["Mac 玩 Windows 游戏", "Steam Mac Apple 芯片", "Epic Games Mac", "Wine macOS", "Whisky 替代", "CrossOver 替代", "免费开源 Mac 游戏启动器", "Vermut"],
   },
   nav: ["使用方法", "兼容性", "对比", "支持我们", "常见问题", "下载"],
   hero: {
     eyebrow: "免费 · 开源 · Apple 芯片",
-    lead: "Vermut 在你的 Mac 上安装 Steam 和 GOG Galaxy，添加你的 Epic Games 游戏库（测试版），并为每个平台配置 Wine，点一下即可启动 Windows 游戏。",
+    lead: "Vermut 在你的 Mac 上安装 Steam，添加你的 Epic Games 游戏库（测试版），并为每个平台配置 Wine，点一下即可启动 Windows 游戏。",
     primary: "下载 Mac 版",
     secondary: "在 GitHub 上加星",
     meta: [macos, "Apple 芯片", `${site.license} 许可证`],
@@ -32,12 +32,12 @@ export const zh = build({
     steps: [
       {
         title: "选择商店",
-        body: "选择 Steam、GOG Galaxy 或 Epic Games（测试版）。Steam 和 GOG 使用官方安装程序；Epic 通过开源客户端 Legendary 接入，无需 Epic 启动器。每个商店都有独立的容器，互不干扰。",
+        body: "选择 Steam 或 Epic Games（测试版）；GOG Galaxy 即将推出。Steam 使用官方安装程序；Epic 通过开源客户端 Legendary 接入，无需 Epic 启动器。每个商店都有独立的容器，互不干扰。",
         description: "屏幕录制：Stores 界面列出 Steam、Epic Games（测试版）和 GOG Galaxy，各自安装在独立的容器中。指针依次划过各商店，然后点按 Open Steam。",
       },
       {
         title: "Vermut 配置 Wine",
-        body: "每个容器都会获得 Wine 11 以及适合其商店的图形层：Steam 用 DXMT，Epic 用 DXVK，GOG 用 WineD3D。之后可以更改，但通常不需要。",
+        body: "每个容器都会获得 Wine 11 以及图形层：默认使用 DXMT，也可选择 DXVK、WineD3D 和 D3DMetal。之后可以更改，但通常不需要。",
         description: "屏幕录制：指针从边栏打开 Steam 容器，切换到 Graphics 标签页，并指向当前选中的后端 DXMT。",
       },
       {
@@ -57,7 +57,7 @@ export const zh = build({
         items: [
           ["DirectX 9、10 和 11 游戏，由 DXMT 或 DXVK 转译为 Metal。"],
           ["独立游戏和较老的游戏，通常最容易成功。"],
-          ["Steam 和 GOG Galaxy 客户端本身，以及通过 Legendary（测试版）接入的 Epic Games 游戏库。"],
+          ["Steam 客户端本身，以及通过 Legendary（测试版）接入的 Epic Games 游戏库。GOG Galaxy 即将推出。"],
         ],
       },
       {
@@ -92,9 +92,9 @@ export const zh = build({
       { label: "开源", cells: [["是，MIT"], ["是，GPL-3.0 [2]"], ["否", "基于 Wine（LGPL）"], ["是，GPL-3.0 [6]"]] },
       { label: "持续维护", cells: [["是"], ["否", "2025 年 4 月 9 日归档；社区分支仍在继续 [1][2]"], ["是", "CrossOver 26，2026 年 2 月 [5]"], ["是", "v2.22.4，2026 年 10 月 15 日 [7]"]] },
       {
-        label: "自动配置 Steam、Epic 和 GOG",
+        label: "自动配置 Steam 和 Epic",
         cells: [
-          ["是", "Steam 和 GOG 各有独立容器；Epic（测试版）通过 Legendary，无需 Epic 启动器"],
+          ["是", "Steam 有独立容器；Epic（测试版）通过 Legendary，无需 Epic 启动器；GOG 即将推出"],
           ["否", "需自行创建容器并运行各安装程序"],
           ["是", "来自其安装目录；CrossOver 25 起支持 Epic 和 GOG [9][10]"],
           ["Epic、GOG、Amazon", "自有启动器；不含 Steam 客户端 [6]"],
@@ -127,7 +127,7 @@ export const zh = build({
       { title: "报告问题", body: "遇到故障？附上 macOS 版本和日志的 Issue 能帮我们修复。", label: "提交问题报告" },
       { title: "告诉我们哪些游戏能玩", body: "玩过什么游戏？无论能否运行，请发布游戏名、商店和图形后端。", label: "提交游戏报告" },
     ],
-    share: { title: "分享 Vermut", body: "认识在 Mac 上玩游戏的朋友？把链接发给他们。", text: "Vermut：在 Mac 上用 Steam、GOG 和 Epic 玩 Windows 游戏。免费开源。" },
+    share: { title: "分享 Vermut", body: "认识在 Mac 上玩游戏的朋友？把链接发给他们。", text: "Vermut：在 Mac 上用 Steam 和 Epic 玩 Windows 游戏。免费开源。" },
   },
   faq: {
     eyebrow: "常见问题",
@@ -137,7 +137,7 @@ export const zh = build({
       { q: "支持 Intel 芯片的 Mac 吗？", a: ["不支持。Vermut 专为 Apple 芯片打造：M1 及之后的所有芯片。"] },
       { q: "需要哪个版本的 macOS？", a: [`${macos}。`] },
       { q: "我的游戏能运行吗？", a: ["取决于游戏。大多数 DirectX 9 至 11 的游戏可以；使用内核级反作弊的游戏不行。完整说明见", { text: "兼容性", href: "#compatibility" }, "部分。"] },
-      { q: "Vermut 能看到我的 Steam 或 Epic 密码吗？", a: ["不能。Steam 和 GOG 在官方商店应用内登录，应用运行在各自的容器中。Epic（测试版）在 Epic 的登录页面登录，会话由 Legendary 保存在你的 Mac 上。"] },
+      { q: "Vermut 能看到我的 Steam 或 Epic 密码吗？", a: ["不能。Steam 在官方 Steam 应用内登录，应用运行在各自的容器中。Epic（测试版）在 Epic 的登录页面登录，会话由 Legendary 保存在你的 Mac 上。"] },
       { q: "Vermut 会安装 Epic Games Launcher 吗？", a: ["不会。Epic 支持目前为测试版，使用开源 Epic 客户端 ", { text: "Legendary", href: "https://github.com/derrod/legendary" }, "：无需 Epic Games Launcher 即可登录、查看游戏库、安装和启动游戏。"] },
       { q: "是否内置 Apple 的 Game Porting Toolkit？", a: ["不内置，Vermut 绝不捆绑它。如果你自行安装，Vermut 会检测到并提供 D3DMetal 作为图形选项。"] },
       {

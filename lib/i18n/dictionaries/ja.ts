@@ -10,15 +10,15 @@ const macos = "macOS 14 Sonoma 以降";
 export const ja = build({
   locale: "ja",
   seo: {
-    title: "Vermut: Steam・GOG・Epic で Windows ゲームを Mac で",
+    title: "Vermut: Steam・Epic で Windows ゲームを Mac で",
     description:
-      "Appleシリコン搭載Mac向けの無料・オープンソースのランチャー。Vermut は Steam と GOG Galaxy をインストールし、Epic Games（ベータ）を追加、Wine を設定して Windows ゲームを起動します。",
-    keywords: ["Mac Windows ゲーム", "Steam Mac Appleシリコン", "Epic Games Mac", "GOG Galaxy Mac", "Wine macOS", "Whisky 代替", "CrossOver 代替", "無料 オープンソース ゲームランチャー Mac", "Vermut"],
+      "Appleシリコン搭載Mac向けの無料・オープンソースのランチャー。Vermut は Steam をインストールし、Epic Games（ベータ）を追加、Wine を設定して Windows ゲームを起動します。",
+    keywords: ["Mac Windows ゲーム", "Steam Mac Appleシリコン", "Epic Games Mac", "Wine macOS", "Whisky 代替", "CrossOver 代替", "無料 オープンソース ゲームランチャー Mac", "Vermut"],
   },
   nav: ["使い方", "互換性", "比較", "支援", "FAQ", "ダウンロード"],
   hero: {
     eyebrow: "無料 · オープンソース · Apple Silicon",
-    lead: "Vermut は Mac に Steam と GOG Galaxy をインストールし、Epic Games のライブラリ（ベータ）を追加して、それぞれに Wine を設定します。Windows ゲームがクリックひとつで起動します。",
+    lead: "Vermut は Mac に Steam をインストールし、Epic Games のライブラリ（ベータ）を追加して、それぞれに Wine を設定します。Windows ゲームがクリックひとつで起動します。",
     primary: "Mac 版をダウンロード",
     secondary: "GitHub でスターを付ける",
     meta: [macos, "Apple Silicon", `${site.license} ライセンス`],
@@ -32,12 +32,12 @@ export const ja = build({
     steps: [
       {
         title: "ストアを選ぶ",
-        body: "Steam、GOG Galaxy、Epic Games（ベータ）から選びます。Steam と GOG は公式インストーラで、Epic はオープンソースのクライアント Legendary 経由で導入され、Epic のランチャーは使いません。ストアごとに専用のボトルがあるので、互いに干渉しません。",
+        body: "Steam または Epic Games（ベータ）を選びます。GOG Galaxy は近日対応予定です。Steam は公式インストーラで、Epic はオープンソースのクライアント Legendary 経由で導入され、Epic のランチャーは使いません。ストアごとに専用のボトルがあるので、互いに干渉しません。",
         description: "画面収録：Stores 画面に Steam、Epic Games（ベータ）、GOG Galaxy が表示され、それぞれ専用のボトルにインストールされています。ポインタがストアの上を移動し、Open Steam をクリックします。",
       },
       {
         title: "Vermut が Wine を設定",
-        body: "各ボトルには Wine 11 と、ストアに合ったグラフィックスレイヤーが入ります。Steam は DXMT、Epic は DXVK、GOG は WineD3D です。あとから変更もできますが、その必要はありません。",
+        body: "各ボトルには Wine 11 と、グラフィックスレイヤーが入ります。標準は DXMT で、DXVK、WineD3D、D3DMetal も選べます。あとから変更もできますが、その必要はありません。",
         description: "画面収録：ポインタがサイドバーから Steam のボトルを開き、Graphics タブに切り替えて、選択中のバックエンド DXMT を指します。",
       },
       {
@@ -57,7 +57,7 @@ export const ja = build({
         items: [
           ["DirectX 9・10・11 のゲーム（DXMT または DXVK で Metal に変換）。"],
           ["インディーや古めのタイトル。多くの場合いちばん簡単です。"],
-          ["Steam と GOG Galaxy のクライアント本体、そして Legendary（ベータ）経由の Epic Games ライブラリ。"],
+          ["Steam クライアント本体、そして Legendary（ベータ）経由の Epic Games ライブラリ。GOG Galaxy は近日対応予定。"],
         ],
       },
       {
@@ -92,9 +92,9 @@ export const ja = build({
       { label: "オープンソース", cells: [["はい（MIT）"], ["はい（GPL-3.0）[2]"], ["いいえ", "Wine（LGPL）がベース"], ["はい（GPL-3.0）[6]"]] },
       { label: "開発継続", cells: [["はい"], ["いいえ", "2025年4月9日にアーカイブ。コミュニティのフォークが継続 [1][2]"], ["はい", "CrossOver 26、2026年2月 [5]"], ["はい", "v2.22.4、2026年10月15日 [7]"]] },
       {
-        label: "Steam・Epic・GOG を自動で設定",
+        label: "Steam・Epic を自動で設定",
         cells: [
-          ["はい", "Steam と GOG は専用ボトル、Epic（ベータ）は Legendary 経由で Epic ランチャー不要"],
+          ["はい", "Steam は専用ボトル、Epic（ベータ）は Legendary 経由で Epic ランチャー不要、GOG は近日対応"],
           ["いいえ", "ボトルを作り、各インストーラを自分で実行"],
           ["はい", "独自のインストールカタログから。CrossOver 25 以降は Epic と GOG も [9][10]"],
           ["Epic、GOG、Amazon", "独自ランチャー。Steam クライアントなし [6]"],
@@ -127,7 +127,7 @@ export const ja = build({
       { title: "バグを報告", body: "不具合がありましたか？ macOS のバージョンとログを添えた Issue が修正につながります。", label: "バグ報告を作成" },
       { title: "動いたゲームを教えて", body: "遊んでみましたか？ 動いても動かなくても、ゲーム名、ストア、グラフィックスバックエンドを投稿してください。", label: "ゲームレポートを送る" },
     ],
-    share: { title: "Vermut をシェア", body: "Mac でゲームをする知り合いがいたら、リンクを送ってください。", text: "Vermut：Steam・GOG・Epic で Windows ゲームを Mac で。無料・オープンソース。" },
+    share: { title: "Vermut をシェア", body: "Mac でゲームをする知り合いがいたら、リンクを送ってください。", text: "Vermut：Steam・Epic で Windows ゲームを Mac で。無料・オープンソース。" },
   },
   faq: {
     eyebrow: "FAQ",
@@ -137,7 +137,7 @@ export const ja = build({
       { q: "Intel 搭載の Mac で動きますか？", a: ["いいえ。Vermut は Appleシリコン（M1 以降のすべてのチップ）向けです。"] },
       { q: "必要な macOS のバージョンは？", a: [`${macos}。`] },
       { q: "自分のゲームは動きますか？", a: ["ゲームによります。DirectX 9〜11 のタイトルの多くは動きますが、カーネルレベルのアンチチートを使うものは動きません。詳しくは", { text: "互換性", href: "#compatibility" }, "のセクションをご覧ください。"] },
-      { q: "Vermut は Steam や Epic のパスワードを見られますか？", a: ["いいえ。Steam と GOG は、専用ボトルで動く公式ストアアプリ内でサインインします。Epic（ベータ）は Epic のサインインページでサインインし、セッションは Legendary が Mac に保存します。"] },
+      { q: "Vermut は Steam や Epic のパスワードを見られますか？", a: ["いいえ。Steam は、専用ボトルで動く公式 Steam アプリ内でサインインします。Epic（ベータ）は Epic のサインインページでサインインし、セッションは Legendary が Mac に保存します。"] },
       { q: "Epic Games Launcher はインストールされますか？", a: ["いいえ。Epic 対応はベータで、オープンソースの Epic クライアント ", { text: "Legendary", href: "https://github.com/derrod/legendary" }, " を使います。サインイン、ライブラリの表示、ゲームのインストールと起動を Epic Games Launcher なしで行えます。"] },
       { q: "Apple の Game Porting Toolkit は同梱されていますか？", a: ["いいえ、同梱はしません。自分でインストールすれば、Vermut が検出してグラフィックスの選択肢に D3DMetal を追加します。"] },
       {

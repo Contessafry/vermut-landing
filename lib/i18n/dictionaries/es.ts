@@ -10,15 +10,15 @@ const macos = "macOS 14 Sonoma o posterior";
 export const es = build({
   locale: "es",
   seo: {
-    title: "Vermut: juegos de Windows en tu Mac con Steam, GOG y Epic",
+    title: "Vermut: juegos de Windows en tu Mac con Steam y Epic",
     description:
-      "Lanzador gratuito y de código abierto para Mac con Apple Silicon. Vermut instala Steam y GOG Galaxy, añade Epic Games (beta), configura Wine y abre tus juegos de Windows.",
-    keywords: ["juegos de Windows en Mac", "Steam Mac Apple Silicon", "Epic Games Mac", "GOG Galaxy Mac", "Wine macOS", "alternativa a Whisky", "alternativa a CrossOver", "lanzador de juegos gratis código abierto Mac", "Vermut"],
+      "Lanzador gratuito y de código abierto para Mac con Apple Silicon. Vermut instala Steam, añade Epic Games (beta), configura Wine y abre tus juegos de Windows.",
+    keywords: ["juegos de Windows en Mac", "Steam Mac Apple Silicon", "Epic Games Mac", "Wine macOS", "alternativa a Whisky", "alternativa a CrossOver", "lanzador de juegos gratis código abierto Mac", "Vermut"],
   },
   nav: ["Cómo funciona", "Compatibilidad", "Comparativa", "Apoyar", "Preguntas", "Descargar"],
   hero: {
     eyebrow: "Gratis · Código abierto · Apple Silicon",
-    lead: "Vermut instala Steam y GOG Galaxy en tu Mac, añade tu biblioteca de Epic Games (beta) y configura Wine para cada uno, para que tus juegos de Windows se abran con un clic.",
+    lead: "Vermut instala Steam en tu Mac, añade tu biblioteca de Epic Games (beta) y configura Wine para cada uno, para que tus juegos de Windows se abran con un clic.",
     primary: "Descargar para Mac",
     secondary: "Dar una estrella en GitHub",
     meta: [macos, "Apple Silicon", `Licencia ${site.license}`],
@@ -32,12 +32,12 @@ export const es = build({
     steps: [
       {
         title: "Elige una tienda",
-        body: "Elige Steam, GOG Galaxy o Epic Games (beta). Steam y GOG se instalan con sus instaladores oficiales; Epic usa el cliente de código abierto Legendary, sin el launcher de Epic. Cada tienda tiene su propia botella, así no se estorban.",
+        body: "Elige Steam o Epic Games (beta); GOG Galaxy llegará pronto. Steam se instala con su instalador oficial; Epic usa el cliente de código abierto Legendary, sin el launcher de Epic. Cada tienda tiene su propia botella, así no se estorban.",
         description: "Grabación de pantalla: la pantalla Stores muestra Steam, Epic Games (beta) y GOG Galaxy, cada uno en su botella. El puntero recorre las tiendas y hace clic en Open Steam.",
       },
       {
         title: "Vermut configura Wine",
-        body: "Cada botella recibe Wine 11 y la capa gráfica adecuada para su tienda: DXMT para Steam, DXVK para Epic, WineD3D para GOG. Puedes cambiarla después, pero no hace falta.",
+        body: "Cada botella recibe Wine 11 y una capa gráfica: DXMT por defecto, con DXVK, WineD3D y D3DMetal disponibles. Puedes cambiarla después, pero no hace falta.",
         description: "Grabación de pantalla: el puntero abre la botella de Steam desde la barra lateral, pasa a la pestaña Graphics y señala el backend seleccionado, DXMT.",
       },
       {
@@ -57,7 +57,7 @@ export const es = build({
         items: [
           ["Juegos DirectX 9, 10 y 11, traducidos a Metal por DXMT o DXVK."],
           ["Títulos indie y más antiguos, que suelen ser los más fáciles."],
-          ["Los propios clientes de Steam y GOG Galaxy, además de tu biblioteca de Epic Games con Legendary (beta)."],
+          ["El propio cliente de Steam, además de tu biblioteca de Epic Games con Legendary (beta). GOG Galaxy llegará pronto."],
         ],
       },
       {
@@ -92,9 +92,9 @@ export const es = build({
       { label: "Código abierto", cells: [["Sí, MIT"], ["Sí, GPL-3.0 [2]"], ["No", "Basado en Wine (LGPL)"], ["Sí, GPL-3.0 [6]"]] },
       { label: "Mantenido", cells: [["Sí"], ["No", "Archivado el 9 de abril de 2025; sigue un fork de la comunidad [1][2]"], ["Sí", "CrossOver 26, febrero de 2026 [5]"], ["Sí", "v2.22.4, 15 de octubre de 2026 [7]"]] },
       {
-        label: "Configura Steam, Epic y GOG por ti",
+        label: "Configura Steam y Epic por ti",
         cells: [
-          ["Sí", "Steam y GOG en sus propias botellas; Epic (beta) con Legendary, sin launcher de Epic"],
+          ["Sí", "Steam en su propia botella; Epic (beta) con Legendary, sin launcher de Epic; GOG pronto"],
           ["No", "Creas una botella y ejecutas cada instalador"],
           ["Sí", "Desde su catálogo de instalación; Epic y GOG desde CrossOver 25 [9][10]"],
           ["Epic, GOG, Amazon", "Launcher propio; sin cliente de Steam [6]"],
@@ -127,7 +127,7 @@ export const es = build({
       { title: "Informar de un error", body: "¿Algo falla? Un issue con tu versión de macOS y los registros nos ayuda a arreglarlo.", label: "Abrir un informe de error" },
       { title: "Cuéntanos qué juegos funcionan", body: "¿Has probado algo? Indica el juego, la tienda y el backend gráfico, funcione o no.", label: "Enviar un informe de juego" },
     ],
-    share: { title: "Comparte Vermut", body: "¿Conoces a alguien que juegue en Mac? Mándale el enlace.", text: "Vermut: juegos de Windows en tu Mac con Steam, GOG y Epic. Gratis y de código abierto." },
+    share: { title: "Comparte Vermut", body: "¿Conoces a alguien que juegue en Mac? Mándale el enlace.", text: "Vermut: juegos de Windows en tu Mac con Steam y Epic. Gratis y de código abierto." },
   },
   faq: {
     eyebrow: "Preguntas frecuentes",
@@ -137,7 +137,7 @@ export const es = build({
       { q: "¿Funciona en Mac con Intel?", a: ["No. Vermut está hecho para Apple Silicon: M1 y todos los chips posteriores."] },
       { q: "¿Qué versión de macOS necesito?", a: [`${macos}.`] },
       { q: "¿Funcionará mi juego?", a: ["Depende del juego. La mayoría de títulos DirectX 9 a 11 sí; los que usan antitrampas de kernel, no. Tienes todos los detalles en la sección de ", { text: "compatibilidad", href: "#compatibility" }, "."] },
-      { q: "¿Vermut ve mi contraseña de Steam o Epic?", a: ["No. En Steam y GOG inicias sesión dentro de la app oficial de la tienda, que se ejecuta en su botella. En Epic (beta) inicias sesión en la página de Epic y Legendary guarda la sesión en tu Mac."] },
+      { q: "¿Vermut ve mi contraseña de Steam o Epic?", a: ["No. En Steam inicias sesión dentro de la app oficial de Steam, que se ejecuta en su botella. En Epic (beta) inicias sesión en la página de Epic y Legendary guarda la sesión en tu Mac."] },
       { q: "¿Vermut instala el Epic Games Launcher?", a: ["No. El soporte de Epic está en beta y usa ", { text: "Legendary", href: "https://github.com/derrod/legendary" }, ", un cliente de Epic de código abierto: inicia sesión, ve tu biblioteca, instala y abre juegos sin el Epic Games Launcher."] },
       { q: "¿Incluye el Game Porting Toolkit de Apple?", a: ["No, Vermut nunca lo incluye. Si lo instalas tú, Vermut lo detecta y ofrece D3DMetal como opción gráfica."] },
       {

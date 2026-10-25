@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Vermut",
     short_name: "Vermut",
-    description: "Steam, GOG and Epic Games (beta) on your Mac.",
+    description: "Steam and Epic Games (beta) on your Mac.",
     start_url: "/",
     display: "browser",
     background_color: "#FFFFFF",
