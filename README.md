@@ -58,8 +58,30 @@ tag, and the SHA-256 parsed from the release notes. The values below are only th
 | `NEXT_PUBLIC_DONATE_PAYPAL_URL` | PayPal donate link for the Support section (new tab); also JSON-LD DonateAction and llms.txt | `https://www.paypal.me/contessafry` |
 | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | Search Console token | empty |
 | `NEXT_PUBLIC_BING_SITE_VERIFICATION` | Bing Webmaster token (`msvalidate.01`) | empty |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob read/write token for download click counts (auto-set when a Blob store is connected) | empty (counting skipped; downloads still redirect) |
+| `BLOB_STORE_ID` | Blob store id (auto-set on Vercel when the store is connected; used with OIDC) | empty |
+| `BLOB_ACCESS` | `private` (default) or `public`, matching how the Blob store was created | `private` |
+| `DOWNLOAD_STATS_SECRET` | Shared secret for `GET /api/download-stats` | empty (endpoint 404s) |
 
 See `.env.example`.
+
+### Download click counts (Vercel Blob)
+
+Counted download buttons go through `/api/download?channel=stable|releases`, which 302s to the GitHub DMG or the releases page. Clicks are stored as **one JSON object per UTC day** in Blob (`download-counts/YYYY-MM-DD.json`), not one file per click. First-touch `utm_source` / `utm_medium` / `utm_campaign` / `gclid` (presence only) live in `sessionStorage` on the client; the route only receives a short English source label.
+
+One-time setup on Vercel:
+
+1. Project → Storage → Create / connect a **Blob** store (Hobby 1 GB included). Production and Preview; add Development if you want local counts via `vercel env pull`.
+2. Redeploy so `BLOB_READ_WRITE_TOKEN` (and `BLOB_STORE_ID`) are present. Do not commit the token.
+3. Add `DOWNLOAD_STATS_SECRET` (a long random string) and redeploy if you want to read counts.
+
+Read today's and the last 7 days' totals:
+
+```bash
+curl -sS -H "Authorization: Bearer $DOWNLOAD_STATS_SECRET" https://<your-domain>/api/download-stats
+```
+
+Deployments with Vercel Authentication need the protection-bypass header as well. If Blob is not configured, `/api/download` still redirects and counting is skipped.
 
 Each release should attach one `.dmg` and put `SHA-256 (<name>.dmg): <hash>` in its notes.
 

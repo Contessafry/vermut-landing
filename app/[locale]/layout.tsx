@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { notFound } from "next/navigation";
+import { Attribution } from "@/components/attribution";
 import { LocaleSuggest } from "@/components/locale-suggest";
 import { fontVars } from "@/lib/fonts";
 import { getDictionaryFor } from "@/lib/i18n";
@@ -67,6 +68,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<"/[
           {t.ui.skipToContent}
         </a>
         {children}
+        <Attribution />
         <Analytics />
         <LocaleSuggest current={locale as Locale} options={suggestOptions()} />
       </body>

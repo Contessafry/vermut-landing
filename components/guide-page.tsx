@@ -7,6 +7,7 @@ import { localeInfo, locales, type Locale } from "@/lib/i18n/config";
 export { guideAlternates } from "@/lib/guides";
 import { guideAlternates, guideHref, guidesUpdated, homeHash, loadGuides, type Guide, type GuideSection, type GuideUi } from "@/lib/guides";
 import { plain } from "@/lib/structured-data";
+import { downloadHref } from "@/lib/download-core";
 import { getRelease } from "@/lib/release";
 import { site } from "@/site.config";
 import { GitHubIcon } from "./icons";
@@ -79,7 +80,17 @@ function Breadcrumb({ items }: { items: { label: string; href?: string }[] }) {
   );
 }
 
-async function DownloadCta({ tone = "dark", locale, ui }: { tone?: "dark" | "light"; locale: Locale; ui: GuideUi }) {
+async function DownloadCta({
+  tone = "dark",
+  locale,
+  ui,
+  path,
+}: {
+  tone?: "dark" | "light";
+  locale: Locale;
+  ui: GuideUi;
+  path: string;
+}) {
   const r = await getRelease();
   const btn =
     tone === "light"
@@ -87,7 +98,7 @@ async function DownloadCta({ tone = "dark", locale, ui }: { tone?: "dark" | "lig
       : "bg-neutral-950 text-white hover:bg-neutral-800";
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-      <a href={r.dmgUrl} className={`inline-flex h-13 items-center gap-2.5 rounded-full px-6 text-base font-semibold transition-colors ${btn}`}>
+      <a href={downloadHref("stable", path)} className={`inline-flex h-13 items-center gap-2.5 rounded-full px-6 text-base font-semibold transition-colors ${btn}`}>
         <ArrowDownToLine className="size-5" aria-hidden="true" />
         {ui.downloadLabel(r.version)}
       </a>
@@ -197,7 +208,7 @@ export async function GuidePage({ slug }: { slug: string }) {
             <p className="mt-8 max-w-[62ch] text-lead text-white text-pretty">
               <RichText value={g.answer} />
             </p>
-            <div className="mt-10"><DownloadCta tone="light" locale={locale} ui={ui} /></div>
+            <div className="mt-10"><DownloadCta tone="light" locale={locale} ui={ui} path={guideHref(locale, slug)} /></div>
             <p className="mt-6 font-mono text-eyebrow uppercase text-white/85">{ui.updated}</p>
           </div>
         </div>
@@ -269,7 +280,7 @@ export async function GuidePage({ slug }: { slug: string }) {
             <h2 id="try-title" className="font-display text-[2rem] leading-none font-extrabold">{ui.tryTitle}</h2>
             <p className="mt-3 text-[0.9375rem] leading-relaxed text-neutral-300">{ui.tryBody}</p>
             <p lang="en" className="mt-3 font-display text-[1.375rem] leading-none font-extrabold">{site.tagline}</p>
-            <div className="mt-6"><DownloadCta tone="light" locale={locale} ui={ui} /></div>
+            <div className="mt-6"><DownloadCta tone="light" locale={locale} ui={ui} path={guideHref(locale, slug)} /></div>
             <h3 className="mt-8 font-mono text-eyebrow uppercase text-neutral-400">{ui.moreGuides}</h3>
             <ul className="mt-3 flex flex-col gap-2.5">
               {others.map((o) => (
