@@ -494,7 +494,7 @@ test("two queued flushes: the second consumes the drain remainder, not a fresh t
   assert.equal(putProbe.aborted, 1, "only the second (hanging) put is aborted");
   assert.ok(secondStarted > 0 && secondAbortedAt > 0, "second put must receive an abort");
   assert.ok(
-    secondLived < timeoutMs - 20,
+    secondLived < 0.75 * timeoutMs,
     `second put lived ${secondLived}ms on leftover; a fresh ${timeoutMs}ms deadline would be ~${timeoutMs}ms`,
   );
   assert.ok(elapsed < 5 * timeoutMs, `hang guard, took ${elapsed}ms`);
@@ -589,6 +589,63 @@ test("readStats hanging list fails within the shared 7-day budget, never with em
   assert.ok(listProbe.aborted >= 1, "shared deadline must abort in-flight lists");
   assert.equal(signals.size, 1, "one signal across all LOOKBACK_DAYS; per-day timers would create many");
   assert.ok(listProbe.called <= LOOKBACK_DAYS);
+});
+
+test("readStats lists the 7 days in parallel on one shared signal", async () => {
+  const listProbe = emptyProbe();
+  const signals = new Set<AbortSignal>();
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const readTimeoutMs = 80;
+  const listDelayMs = Math.floor(readTimeoutMs / 4);
+  const slow: BlobEventIO = {
+    async put() {},
+    async get() {
+      return null;
+    },
+    async list(_prefix, _cursor, signal) {
+      trackAbort(listProbe, signal);
+      if (signal) signals.add(signal);
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        await new Promise((r) => setTimeout(r, listDelayMs));
+        if (signal?.aborted) throw Object.assign(new Error("The request was aborted."), { name: "AbortError" });
+        return { pathnames: [] };
+      } finally {
+        inFlight -= 1;
+      }
+    },
+    async del() {},
+  };
+  const rec = createRecorder({
+    io: slow,
+    now,
+    prune: false,
+    timeoutMs: 80,
+    readTimeoutMs,
+    sleep: async () => {},
+  });
+  const started = Date.now();
+  let stats: Awaited<ReturnType<typeof rec.readStats>> | undefined;
+  let readError: unknown;
+  try {
+    stats = await rec.readStats();
+  } catch (error) {
+    readError = error;
+  }
+  const elapsed = Date.now() - started;
+  assert.ok(
+    maxInFlight >= 2,
+    `days must overlap (maxInFlight=${maxInFlight}); a for...await with the same signal stays at 1`,
+  );
+  assert.equal(readError, undefined, "parallel days must finish inside the shared budget");
+  assert.ok(stats);
+  assert.equal(stats.last7Days.days.length, LOOKBACK_DAYS);
+  assert.equal(listProbe.called, LOOKBACK_DAYS, "one list per lookback day");
+  assert.equal(listProbe.signalDefined, LOOKBACK_DAYS, "every day must receive the shared signal");
+  assert.equal(signals.size, 1, "one signal across all days");
+  assert.ok(elapsed < 1000, `hang guard, took ${elapsed}ms`);
 });
 
 test("download-stats route declares maxDuration for one shared read, not 7×10s", async () => {
