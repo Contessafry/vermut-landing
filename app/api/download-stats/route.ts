@@ -25,8 +25,9 @@ function providedSecret(request: Request): string | null {
 /**
  * Today's counts and the last 7 UTC days, as JSON. Guarded by DOWNLOAD_STATS_SECRET.
  * Unconfigured secret → 404 (the endpoint does not advertise itself).
- * No date query: out-of-retention and invalid-date cases are not reachable here.
- * They are handled by readCountedDay() for the later range-query PR.
+ * `?date=` is ignored — this endpoint does not accept a date query.
+ * Out-of-retention and invalid-date cases are not reachable here; they are
+ * handled by readCountedDay() for the later range-query PR.
  * readStats() uses one 10s deadline for all 7 days; expiry is 503 blob_unavailable,
  * never a day of zeros.
  */

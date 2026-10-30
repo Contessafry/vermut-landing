@@ -8,8 +8,11 @@
  * not double-count. There is no shared object, no etag, no ifMatch.
  *
  * /api/download-stats lists each day prefix (paginated) and sums the batches.
- * Objects older than RETENTION_DAYS are deleted (delete is free). No daily
- * rollup — a rollup would be a shared write.
+ * At most one prune pass per isolate per UTC day: one folded list of
+ * `download-counts/` finds every day that exists (holes included), then
+ * expired day prefixes are listed and deleted (delete is free). Legacy
+ * `download-counts/<date>.json` objects are deleted in the same pass.
+ * No daily rollup — a rollup would be a shared write.
  *
  * If Blob is not configured, recordDownloadClick() skips counting. The download
  * redirect must not depend on this module succeeding.
@@ -35,10 +38,20 @@ export type DayCounts = {
 
 export type BatchRecord = DayCounts & { batchId: string };
 
+export type BlobPutOptions = { allowOverwrite: boolean };
+
+export type FoldedPage = {
+  folders: string[];
+  blobs: string[];
+  cursor?: string;
+};
+
 export type BlobEventIO = {
-  put: (pathname: string, body: string, signal?: AbortSignal) => Promise<void>;
+  put: (pathname: string, body: string, signal?: AbortSignal, opts?: BlobPutOptions) => Promise<void>;
   get: (pathname: string, signal?: AbortSignal) => Promise<string | null>;
   list: (prefix: string, cursor?: string, signal?: AbortSignal) => Promise<{ pathnames: string[]; cursor?: string }>;
+  /** Folded listing (`mode: 'folded'`). Folders are day prefixes; blobs are top-level objects. */
+  listFolded: (prefix: string, cursor?: string, signal?: AbortSignal) => Promise<FoldedPage>;
   del: (pathnames: string[], signal?: AbortSignal) => Promise<void>;
 };
 
@@ -100,7 +113,6 @@ type Access = "public" | "private";
 let access: Access = process.env.BLOB_ACCESS === "public" ? "public" : "private";
 let accessLocked = process.env.BLOB_ACCESS === "public" || process.env.BLOB_ACCESS === "private";
 const warnedKinds = new Set<string>();
-const prunedDates = new Set<string>();
 
 export const utcDate = (ms = Date.now()) => new Date(ms).toISOString().slice(0, 10);
 
@@ -125,6 +137,28 @@ export function batchPath(date: string, batchId: string): string {
 
 export function dayPrefix(date: string): string {
   return `${PREFIX}/${date}/`;
+}
+
+/** Old RMW path. Not written anymore; prune deletes any leftover. */
+export function legacyDayPath(date: string): string {
+  return `${PREFIX}/${date}.json`;
+}
+
+const DAY_FOLDER_RE = /(?:^|\/)(\d{4}-\d{2}-\d{2})\/?$/;
+const LEGACY_JSON_RE = /(?:^|\/)(\d{4}-\d{2}-\d{2})\.json$/;
+
+export function dateFromDayFolder(folder: string): string | null {
+  const m = DAY_FOLDER_RE.exec(folder.trim());
+  if (!m) return null;
+  const parsed = parseUtcDate(m[1]);
+  return parsed.ok ? parsed.date : null;
+}
+
+export function dateFromLegacyBlob(pathname: string): string | null {
+  const m = LEGACY_JSON_RE.exec(pathname);
+  if (!m) return null;
+  const parsed = parseUtcDate(m[1]);
+  return parsed.ok ? parsed.date : null;
 }
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -299,15 +333,29 @@ export async function runWithDeadline<T>(ms: number, fn: (signal: AbortSignal) =
   }
 }
 
-export async function vercelPut(pathname: string, body: string, signal?: AbortSignal): Promise<void> {
+/** Shared put flags. `allowOverwrite: true` is the retry-safe invariant — do not flip. */
+export function blobPutOptions(signal?: AbortSignal) {
+  return {
+    addRandomSuffix: false as const,
+    allowOverwrite: true as const,
+    contentType: "application/json",
+    cacheControlMaxAge: 60,
+    abortSignal: signal,
+  };
+}
+
+export async function vercelPut(
+  pathname: string,
+  body: string,
+  signal?: AbortSignal,
+  opts?: BlobPutOptions,
+): Promise<void> {
+  const write = blobPutOptions(signal);
   await withAccess((a) =>
     put(pathname, body, {
       access: a,
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-      cacheControlMaxAge: 60,
-      abortSignal: signal,
+      ...write,
+      allowOverwrite: opts?.allowOverwrite ?? write.allowOverwrite,
     }),
   );
 }
@@ -333,6 +381,25 @@ export async function vercelList(
   };
 }
 
+export async function vercelListFolded(
+  prefix: string,
+  cursor?: string,
+  signal?: AbortSignal,
+): Promise<FoldedPage> {
+  const page = await list({
+    prefix,
+    cursor,
+    limit: LIST_PAGE,
+    mode: "folded",
+    abortSignal: signal,
+  });
+  return {
+    folders: page.folders ?? [],
+    blobs: page.blobs.map((b) => b.pathname),
+    cursor: page.hasMore ? page.cursor : undefined,
+  };
+}
+
 export async function vercelDel(pathnames: string[], signal?: AbortSignal): Promise<void> {
   if (!pathnames.length) return;
   await del(pathnames, { abortSignal: signal });
@@ -342,6 +409,7 @@ export const vercelIO: BlobEventIO = {
   put: vercelPut,
   get: vercelGet,
   list: vercelList,
+  listFolded: vercelListFolded,
   del: vercelDel,
 };
 
@@ -436,7 +504,9 @@ export async function persistEvents(events: ClickEvent[], options: PersistOption
     const remaining = deadlineAt - Date.now();
     if (remaining < 10) break;
     try {
-      await runWithDeadline(remaining, (signal) => io.put(pathname, body, signal));
+      await runWithDeadline(remaining, (signal) =>
+        io.put(pathname, body, signal, { allowOverwrite: blobPutOptions(signal).allowOverwrite }),
+      );
       return;
     } catch (error) {
       lastError = error;
@@ -449,27 +519,59 @@ export async function persistEvents(events: ClickEvent[], options: PersistOption
   throw lastError instanceof Error ? lastError : new DeadlineError(budgetMs);
 }
 
+export async function listAllFolded(
+  io: BlobEventIO,
+  prefix: string,
+  signal?: AbortSignal,
+): Promise<{ folders: string[]; blobs: string[] }> {
+  const folders: string[] = [];
+  const blobs: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await io.listFolded(prefix, cursor, signal);
+    folders.push(...page.folders);
+    blobs.push(...page.blobs);
+    cursor = page.cursor;
+  } while (cursor);
+  return { folders, blobs };
+}
+
+/**
+ * One discovery list (`mode: 'folded'` on `download-counts/`) then delete
+ * every day older than RETENTION_DAYS and every leftover legacy
+ * `download-counts/<date>.json`. Stops on the first list/delete error so
+ * the next UTC day (or a later isolate) can retry. Delete is free.
+ */
 export async function pruneExpired(
   io: BlobEventIO,
   now = Date.now(),
   signal?: AbortSignal,
 ): Promise<void> {
-  for (let age = RETENTION_DAYS + 1; age <= RETENTION_DAYS + 7; age++) {
+  if (signal?.aborted) return;
+  try {
+    const discovered = await listAllFolded(io, `${PREFIX}/`, signal);
     if (signal?.aborted) return;
-    const date = utcDate(now - age * 86_400_000);
-    if (prunedDates.has(date)) continue;
-    try {
+
+    const legacy = discovered.blobs.filter((pathname) => dateFromLegacyBlob(pathname));
+    if (legacy.length) {
+      await io.del(legacy, signal);
+      if (signal?.aborted) return;
+    }
+
+    for (const folder of discovered.folders) {
+      if (signal?.aborted) return;
+      const date = dateFromDayFolder(folder);
+      if (!date || !isOutOfRetention(date, now)) continue;
       const pathnames = await listAll(io, dayPrefix(date), signal);
       if (signal?.aborted) return;
       await io.del(pathnames, signal);
-      prunedDates.add(date);
-    } catch (error) {
-      if (signal?.aborted) return;
-      warnOnce(
-        "prune",
-        `[download] prune of ${date} failed. ${error instanceof Error ? error.message : ""}`.trim(),
-      );
     }
+  } catch (error) {
+    if (signal?.aborted) return;
+    warnOnce(
+      "prune",
+      `[download] prune failed. ${error instanceof Error ? error.message : ""}`.trim(),
+    );
   }
 }
 
@@ -510,6 +612,8 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
   let waveDeadlineAt: number | null = null;
   let waveAbort: AbortController | null = null;
   let waveAbortTimer: ReturnType<typeof setTimeout> | undefined;
+  /** UTC date of the prune pass that already started in this isolate. */
+  let lastPruneUtcDay: string | null = null;
 
   function beginWave(end: number): AbortSignal {
     if (waveAbortTimer) clearTimeout(waveAbortTimer);
@@ -532,9 +636,13 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
       const batchId = randomUUID();
       try {
         await persistEvents(events, { ...options, io, batchId, now, deadlineAt });
-        // Fire-and-forget: prune must not block the drain or fail the count.
-        // The wave signal aborts it at the same deadline; a miss is retried later.
-        if (shouldPrune) void pruneExpired(io, now(), signal);
+        // At most one prune pass per isolate per UTC day. Flag is set when
+        // the pass starts, not before persist. A failed pass retries tomorrow.
+        const today = utcDate(now());
+        if (shouldPrune && lastPruneUtcDay !== today) {
+          lastPruneUtcDay = today;
+          void pruneExpired(io, now(), signal);
+        }
       } catch (error) {
         const kind = error instanceof Error ? error.name || "write_failed" : "write_failed";
         warnOnce(

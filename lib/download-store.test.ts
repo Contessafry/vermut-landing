@@ -6,11 +6,13 @@ import {
   RETENTION_DAYS,
   applyEvents,
   batchPath,
+  blobPutOptions,
   createRecorder,
   dayPrefix,
   emptyDay,
   isFutureDate,
   isOutOfRetention,
+  legacyDayPath,
   mergeDays,
   parseDayCounts,
   parseUtcDate,
@@ -20,6 +22,7 @@ import {
   readCountedDay,
   utcDate,
   type BlobEventIO,
+  type BlobPutOptions,
   type ClickEvent,
   type DayCounts,
 } from "./download-store.ts";
@@ -78,14 +81,29 @@ test("retention helpers: 91 days ago is out, tomorrow is future", () => {
   assert.equal(isFutureDate("2026-10-30", NOON), false);
 });
 
-function createMemoryBlob(): BlobEventIO & { files: Map<string, string>; puts: number; lists: number } {
+function createMemoryBlob(): BlobEventIO & {
+  files: Map<string, string>;
+  puts: number;
+  lists: number;
+  foldedLists: number;
+  putOptions: Array<BlobPutOptions | undefined>;
+} {
   const files = new Map<string, string>();
-  const io: BlobEventIO & { files: Map<string, string>; puts: number; lists: number } = {
+  const io: BlobEventIO & {
+    files: Map<string, string>;
+    puts: number;
+    lists: number;
+    foldedLists: number;
+    putOptions: Array<BlobPutOptions | undefined>;
+  } = {
     files,
     puts: 0,
     lists: 0,
-    async put(pathname, body) {
+    foldedLists: 0,
+    putOptions: [],
+    async put(pathname, body, _signal, opts) {
       io.puts += 1;
+      io.putOptions.push(opts);
       files.set(pathname, body);
     },
     async get(pathname) {
@@ -96,12 +114,42 @@ function createMemoryBlob(): BlobEventIO & { files: Map<string, string>; puts: n
       if (cursor) return { pathnames: [] };
       return { pathnames: [...files.keys()].filter((k) => k.startsWith(prefix)) };
     },
+    async listFolded(prefix, cursor) {
+      io.foldedLists += 1;
+      if (cursor) return { folders: [], blobs: [] };
+      const root = prefix.endsWith("/") ? prefix : `${prefix}/`;
+      const folders = new Set<string>();
+      const blobs: string[] = [];
+      for (const k of files.keys()) {
+        if (!k.startsWith(root) && k !== prefix) continue;
+        const rest = k.startsWith(root) ? k.slice(root.length) : k.slice(prefix.length).replace(/^\//, "");
+        if (!rest) continue;
+        const slash = rest.indexOf("/");
+        if (slash === -1) {
+          blobs.push(k);
+        } else {
+          folders.add(`${root}${rest.slice(0, slash)}/`);
+        }
+      }
+      return { folders: [...folders], blobs };
+    },
     async del(pathnames) {
       for (const p of pathnames) files.delete(p);
     },
   };
   return io;
 }
+
+test("persistEvents puts with allowOverwrite true so a retry cannot double-count", async () => {
+  const io = createMemoryBlob();
+  await persistEvents(click(1), { io, now, sleep: async () => {}, timeoutMs: 200, batchId: "once" });
+  assert.ok(io.putOptions.length >= 1);
+  for (const opts of io.putOptions) {
+    assert.equal(opts?.allowOverwrite, true, "every put must pass allowOverwrite: true");
+  }
+  assert.equal(blobPutOptions().allowOverwrite, true);
+  assert.equal(io.files.has(batchPath("2026-10-30", "once")), true);
+});
 
 test("new day, no objects, 10 concurrent isolate flushes land on total=10 (10 trials)", async () => {
   const totals: number[] = [];
@@ -248,6 +296,9 @@ test("hung put is aborted via signal and does not wait on the in-flight call", a
     async list() {
       return { pathnames: [] };
     },
+    async listFolded() {
+      return { folders: [], blobs: [] };
+    },
     async del() {},
   };
   const started = Date.now();
@@ -369,6 +420,37 @@ test("pruneExpired deletes objects older than 90 days and never writes a rollup"
   assert.equal(io.files.has(batchPath(old, "stale")), false);
   assert.equal(io.files.has(batchPath("2026-10-30", "fresh")), true);
   assert.equal([...io.files.keys()].some((k) => k.endsWith("rollup.json") || k === `${dayPrefix("2026-10-30").slice(0, -1)}.json`), false);
+});
+
+test("pruneExpired deletes a day outside the old 91-97 band (traffic hole)", async () => {
+  const io = createMemoryBlob();
+  const hole = utcDate(NOON - 120 * 86_400_000);
+  const recent = utcDate(NOON - 2 * 86_400_000);
+  io.files.set(batchPath(hole, "ancient"), JSON.stringify({ date: hole, total: 3, channels: {}, sources: {}, paths: {} }));
+  io.files.set(batchPath(recent, "keep"), JSON.stringify({ date: recent, total: 1, channels: {}, sources: {}, paths: {} }));
+  await pruneExpired(io, NOON);
+  assert.equal(io.files.has(batchPath(hole, "ancient")), false, "folded discovery must delete days older than 90, not a 91-97 window");
+  assert.equal(io.files.has(batchPath(recent, "keep")), true);
+});
+
+test("pruneExpired deletes leftover legacy download-counts/<date>.json", async () => {
+  const io = createMemoryBlob();
+  const leftover = "2026-10-01";
+  io.files.set(legacyDayPath(leftover), JSON.stringify({ date: leftover, total: 4, channels: {}, sources: {}, paths: {} }));
+  io.files.set(batchPath("2026-10-30", "fresh"), JSON.stringify({ date: "2026-10-30", total: 1, channels: {}, sources: {}, paths: {} }));
+  await pruneExpired(io, NOON);
+  assert.equal(io.files.has(legacyDayPath(leftover)), false, "folded pass must delete top-level legacy day JSON");
+  assert.equal(io.files.has(batchPath("2026-10-30", "fresh")), true);
+});
+
+test("createRecorder prunes at most once per isolate per UTC day", async () => {
+  const io = createMemoryBlob();
+  const rec = createRecorder({ io, now, prune: true, sleep: async () => {}, timeoutMs: 200, maxAttempts: 1 });
+  await rec.record({ channel: "stable", source: "a", path: "/" });
+  await rec.record({ channel: "stable", source: "b", path: "/" });
+  await rec.record({ channel: "stable", source: "c", path: "/" });
+  assert.equal(io.puts, 3);
+  assert.equal(io.foldedLists, 1, "a prune-per-flush mutant lists the store once per put");
 });
 
 test("mergeDays adds batches and does not reset", () => {
@@ -530,7 +612,7 @@ test("pruneExpired is aborted by the wave signal and does not block the drain", 
   const pruneProbe = emptyProbe();
   const pruning: BlobEventIO = {
     ...io,
-    async list(_prefix, _cursor, signal) {
+    async listFolded(_prefix, _cursor, signal) {
       trackAbort(pruneProbe, signal);
       return hangUntilAbort(signal);
     },
@@ -548,8 +630,8 @@ test("pruneExpired is aborted by the wave signal and does not block the drain", 
   while (pruneProbe.aborted < 1 && Date.now() < waitUntil) {
     await new Promise((r) => setTimeout(r, 5));
   }
-  assert.ok(pruneProbe.called >= 1, "prune must list expired prefixes");
-  assert.equal(pruneProbe.signalDefined, pruneProbe.called, "prune list/del must receive the wave signal");
+  assert.ok(pruneProbe.called >= 1, "prune must folded-list the store prefix");
+  assert.equal(pruneProbe.signalDefined, pruneProbe.called, "prune listFolded must receive the wave signal");
   assert.ok(pruneProbe.aborted >= 1, "wave deadline must abort prune; a miss is retried later");
 });
 
@@ -565,6 +647,9 @@ test("readStats hanging list fails within the shared 7-day budget, never with em
       trackAbort(listProbe, signal);
       if (signal) signals.add(signal);
       return hangUntilAbort(signal);
+    },
+    async listFolded() {
+      return { folders: [], blobs: [] };
     },
     async del() {},
   };
@@ -615,6 +700,9 @@ test("readStats lists the 7 days in parallel on one shared signal", async () => 
       } finally {
         inFlight -= 1;
       }
+    },
+    async listFolded() {
+      return { folders: [], blobs: [] };
     },
     async del() {},
   };
@@ -670,6 +758,9 @@ function createPagedBlob(files: Map<string, string>, pageSize = LIST_PAGE): Blob
       const slice = all.slice(start, start + pageSize);
       const next = start + pageSize < all.length ? String(start + pageSize) : undefined;
       return { pathnames: slice, cursor: next };
+    },
+    async listFolded() {
+      return { folders: [], blobs: [] };
     },
     async del(pathnames) {
       for (const p of pathnames) files.delete(p);
