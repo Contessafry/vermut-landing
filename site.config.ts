@@ -62,14 +62,16 @@ export const site = {
   tagline: "Pour. Click. Play.",
 
   /**
-   * PLACEHOLDER: production origin. Falls back to Vercel's production domain,
-   * then to a dummy origin so local builds still work.
+   * Canonical origin for metadata, sitemap, robots, JSON-LD, llms.txt.
+   * Production sets NEXT_PUBLIC_SITE_URL (verified 2026-10-30 on
+   * https://vermut.vercel.app — that HTML has no vermut.example).
+   * Local / unset builds use localhost so we never emit a fake public host.
    */
   url:
     env("NEXT_PUBLIC_SITE_URL") ??
     (env("VERCEL_PROJECT_PRODUCTION_URL")
       ? `https://${env("VERCEL_PROJECT_PRODUCTION_URL")}`
-      : "https://vermut.example"),
+      : "http://localhost:3000"),
 
   githubUrl,
 

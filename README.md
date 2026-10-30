@@ -47,7 +47,7 @@ tag, and the SHA-256 parsed from the release notes. The values below are only th
 
 | Variable | What | Default today |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SITE_URL` | Production origin (canonical, OG, sitemap, robots, llms.txt) | Vercel production domain, else `https://vermut.example` |
+| `NEXT_PUBLIC_SITE_URL` | Production origin (canonical, OG, sitemap, robots, llms.txt) | `VERCEL_PROJECT_PRODUCTION_URL`, else `http://localhost:3000` (local only; production HTML uses `https://vermut.vercel.app`) |
 | `NEXT_PUBLIC_GITHUB_URL` | App source repo | `https://github.com/Contessafry/Vermut` |
 | `NEXT_PUBLIC_VERSION` | Fallback version | `1.1.2` |
 | `NEXT_PUBLIC_DMG_NAME` / `NEXT_PUBLIC_DOWNLOAD_URL` | Fallback DMG name / URL | `Vermut-1.1.2.dmg` / `releases/latest` |
@@ -67,7 +67,7 @@ See `.env.example`.
 
 ### Download click counts (Vercel Blob)
 
-Counted download buttons go through `/api/download?channel=stable|releases`, which 302s to the GitHub DMG or the releases page. Clicks are stored as **one JSON object per UTC day** in Blob (`download-counts/YYYY-MM-DD.json`), not one file per click. First-touch `utm_source` / `utm_medium` / `utm_campaign` / `gclid` (presence only) live in `sessionStorage` on the client; the route only receives a short English source label.
+Counted download buttons go through `/api/download?channel=stable|releases`, which 302s to the GitHub DMG or the releases page. The count runs in `after()` after the 302 is sent; a hung Blob write is abandoned after 4s (5 etag retries max) and never delays the download. Clicks are stored as **one JSON object per UTC day** in Blob (`download-counts/YYYY-MM-DD.json`), not one file per click. First-touch `utm_source` / `utm_medium` / `utm_campaign` / `gclid` (presence only) live in `sessionStorage` on the client; the route only receives a short English source label.
 
 One-time setup on Vercel:
 

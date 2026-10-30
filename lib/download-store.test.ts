@@ -160,6 +160,64 @@ test("persistEvents: a thrown GET does not write total=1 over an existing day", 
   assert.equal(io.writes.length, 0);
 });
 
+test("persistEvents: after 5 etag conflicts the batch is skipped, not guessed", async () => {
+  const start: DayCounts = {
+    date: "2026-10-30",
+    updatedAt: "2026-10-30T00:00:00.000Z",
+    total: 8,
+    channels: { stable: 8 },
+    sources: { direct: 8 },
+    paths: { "/": 8 },
+  };
+  const io = createFakeBlob(start);
+  const alwaysStale: BlobDayIO = {
+    async readDay(date) {
+      const result = await io.readDay(date);
+      if (result.kind === "ok") return { ...result, etag: '"never-matches"' };
+      return result;
+    },
+    writeDay: (day, ifMatch) => io.writeDay(day, ifMatch),
+    saveCorrupt: (date, text) => io.saveCorrupt(date, text),
+  };
+  let writes = 0;
+  const counting: BlobDayIO = {
+    readDay: (date) => alwaysStale.readDay(date),
+    async writeDay(day, ifMatch) {
+      writes += 1;
+      return alwaysStale.writeDay(day, ifMatch);
+    },
+    saveCorrupt: (date, text) => alwaysStale.saveCorrupt(date, text),
+  };
+  await persistEvents(click(1), { io: counting, sleep: async () => {}, now: () => Date.parse("2026-10-30T12:00:00.000Z") });
+  assert.equal(writes, 5);
+  const read = await io.readDay("2026-10-30");
+  assert.equal(read.kind, "ok");
+  if (read.kind === "ok") assert.equal(read.day.total, 8);
+});
+
+test("persistEvents: a hung Blob write is abandoned after timeoutMs", async () => {
+  const hung: BlobDayIO = {
+    async readDay() {
+      return { kind: "missing" };
+    },
+    writeDay() {
+      return new Promise((resolve) => {
+        const timer = setTimeout(resolve, 60_000);
+        timer.unref();
+      });
+    },
+    async saveCorrupt() {},
+  };
+  const started = Date.now();
+  await persistEvents(click(1), {
+    io: hung,
+    timeoutMs: 40,
+    sleep: async () => {},
+    now: () => Date.parse("2026-10-30T12:00:00.000Z"),
+  });
+  assert.ok(Date.now() - started < 1000, "timeout must not wait on the hung write");
+});
+
 test("persistEvents: corrupt JSON is backed up and not overwritten with total=0", async () => {
   const io = createFakeBlob();
   const wrapped: BlobDayIO = {

@@ -123,10 +123,15 @@ export function referrerLabel(referrer: string, pageHost: string): string {
 }
 
 /**
- * Only https GitHub URLs under our own repo. Query-string destinations are
- * never accepted: the caller must pass a URL it already trusts.
+ * Only https GitHub URLs under our own repo. Hostname must be exactly
+ * `github.com` (case-insensitive; WHATWG normalises it). Rejected: any
+ * backslash (literal or `%5c`), username/password, explicit port other than
+ * the default HTTPS port, query string, hash. Port `:443` is allowed because
+ * it is the default HTTPS port — Node's URL parser already strips it, so
+ * `https://github.com:443/…` and `https://github.com/…` compare equal.
  */
 export function isSafeGithubRedirect(url: string, repoUrl: string): boolean {
+  if (/\\|%5c/i.test(url)) return false;
   let target: URL;
   let repo: URL;
   try {
@@ -137,7 +142,11 @@ export function isSafeGithubRedirect(url: string, repoUrl: string): boolean {
   }
   if (target.protocol !== "https:" || repo.protocol !== "https:") return false;
   if (target.username || target.password) return false;
-  if (target.hostname !== "github.com" || repo.hostname !== "github.com") return false;
+  if (target.hostname.toLowerCase() !== "github.com") return false;
+  if (repo.hostname.toLowerCase() !== "github.com") return false;
+  if (target.port !== "" && target.port !== "443") return false;
+  if (target.search !== "" || target.hash !== "") return false;
+  if (/\\|%5c/i.test(target.pathname) || /\\|%5c/i.test(target.href)) return false;
   const repoPath = repo.pathname.replace(/\/+$/, "") || "/";
   const path = target.pathname.replace(/\/+$/, "") || "/";
   return path === repoPath || path.startsWith(`${repoPath}/`);

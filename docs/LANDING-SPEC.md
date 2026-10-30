@@ -216,14 +216,14 @@ These are the only values we don't know. All of them are in `site.config.ts` and
 
 | Key | Env | Current |
 |---|---|---|
-| Site URL | `NEXT_PUBLIC_SITE_URL` (falls back to `VERCEL_PROJECT_PRODUCTION_URL`) | `https://vermut.example` |
+| Site URL | `NEXT_PUBLIC_SITE_URL` (falls back to `VERCEL_PROJECT_PRODUCTION_URL`, then `http://localhost:3000`) | Production: `https://vermut.vercel.app`. Local unset: `http://localhost:3000`. |
 | GitHub URL | `NEXT_PUBLIC_GITHUB_URL` | `https://github.com/Contessafry/Vermut` |
 | Download URL | `NEXT_PUBLIC_DOWNLOAD_URL` | `{github}/releases/latest` |
 | Version | `NEXT_PUBLIC_VERSION` | `1.1.2` (latest release fallback; live value from the GitHub API) |
 
 ## 16. Review checklist (run before every release)
 
-- [ ] Placeholders filled (`rg PLACEHOLDER`, and `vermut.example` no longer appears in the built HTML).
+- [ ] Placeholders filled (`rg PLACEHOLDER`). Production HTML uses the real origin; local unset builds emit `http://localhost:3000`, never `vermut.example`.
 - [ ] Videos and hero screenshot re-captured from the **revised** app: no Fortnite copy, no "grapple-wine", no CaskLauncher path.
 - [ ] Version, min macOS and requirements match `Package.swift`, Info.plist and README.
 - [ ] Competitor cells re-verified against sources [1]–[10]; "checked" date updated in `content.ts`.

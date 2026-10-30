@@ -42,12 +42,16 @@ export type PersistOptions = {
   maxAttempts?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /** Cap a hung read/write. `0` disables. Default WRITE_TIMEOUT_MS. */
+  timeoutMs?: number;
 };
 
 const PREFIX = "download-counts";
 const KEY_CAP = 200;
 const LOOKBACK_DAYS = 7;
 const MAX_ATTEMPTS = 5;
+/** Hung Blob I/O must not keep the isolate (or a test) waiting. */
+export const WRITE_TIMEOUT_MS = 4000;
 
 type Access = "public" | "private";
 
@@ -170,6 +174,30 @@ async function withAccess<T>(fn: (a: Access) => Promise<T>): Promise<T> {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+class PersistTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`blob persist timed out after ${ms}ms`);
+    this.name = "PersistTimeoutError";
+  }
+}
+
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  if (ms <= 0) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new PersistTimeoutError(ms)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export async function vercelReadDay(date: string): Promise<ReadDayResult> {
   let result: Awaited<ReturnType<typeof get>>;
   try {
@@ -223,8 +251,7 @@ const vercelIO: BlobDayIO = {
  * with backoff (max 5). Never overwrites a higher same-day total with a lower one.
  * Network / 5xx / corrupt JSON skip the batch instead of resetting the file to 0.
  */
-export async function persistEvents(events: ClickEvent[], options: PersistOptions = {}): Promise<void> {
-  if (!events.length) return;
+async function persistEventsOnce(events: ClickEvent[], options: PersistOptions): Promise<void> {
   const io = options.io ?? vercelIO;
   const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
   const sleep = options.sleep ?? defaultSleep;
@@ -285,6 +312,26 @@ export async function persistEvents(events: ClickEvent[], options: PersistOption
       }
       throw error;
     }
+  }
+}
+
+/**
+ * Read-modify-write one day's JSON with etag/ifMatch. On 409, re-read and retry
+ * with backoff (max 5). Never overwrites a higher same-day total with a lower one.
+ * Network / 5xx / corrupt JSON skip the batch instead of resetting the file to 0.
+ * A hung Blob call is abandoned after timeoutMs (default 4s) with a warn.
+ */
+export async function persistEvents(events: ClickEvent[], options: PersistOptions = {}): Promise<void> {
+  if (!events.length) return;
+  const timeoutMs = options.timeoutMs ?? WRITE_TIMEOUT_MS;
+  try {
+    await withTimeout(persistEventsOnce(events, options), timeoutMs);
+  } catch (error) {
+    if (error instanceof PersistTimeoutError) {
+      warnOnce("write_timeout", `[download] Blob write timed out after ${timeoutMs}ms; skipped batch.`);
+      return;
+    }
+    throw error;
   }
 }
 

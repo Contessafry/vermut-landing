@@ -79,3 +79,25 @@ test("isSafeGithubRedirect only allows this repo on github.com", () => {
   assert.equal(isSafeGithubRedirect("https://objects.githubusercontent.com/foo", repo), false);
   assert.equal(isSafeGithubRedirect("/api/download?url=https://github.com/Contessafry/Vermut", repo), false);
 });
+
+test("isSafeGithubRedirect accepts a normalised github.com host and default port 443", () => {
+  assert.equal(
+    isSafeGithubRedirect("https://GITHUB.COM/Contessafry/Vermut/releases/latest", repo),
+    true,
+  );
+  // WHATWG drops :443 (default HTTPS port). We allow that explicit default.
+  assert.equal(
+    isSafeGithubRedirect("https://github.com:443/Contessafry/Vermut/releases/latest", repo),
+    true,
+  );
+});
+
+test("isSafeGithubRedirect rejects query, hash, credentials, backslash and lookalike hosts", () => {
+  assert.equal(isSafeGithubRedirect("https://github.com/Contessafry/Vermut?x=1", repo), false);
+  assert.equal(isSafeGithubRedirect("https://github.com/Contessafry/Vermut#x", repo), false);
+  assert.equal(isSafeGithubRedirect("https://github.com/Contessafry/Vermut\\@evil.com/", repo), false);
+  assert.equal(isSafeGithubRedirect("https://github.com/Contessafry/Vermut%5C@evil.com/", repo), false);
+  assert.equal(isSafeGithubRedirect("https://github.com.evil.com/Contessafry/Vermut", repo), false);
+  assert.equal(isSafeGithubRedirect("https://user:pass@github.com/Contessafry/Vermut", repo), false);
+  assert.equal(isSafeGithubRedirect("https://github.com:8443/Contessafry/Vermut", repo), false);
+});
