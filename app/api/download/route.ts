@@ -23,8 +23,10 @@ async function redirectToGithub(request: Request) {
 export async function GET(request: Request) {
   const { url, channel, response } = await redirectToGithub(request);
   // after() runs once the 302 has been sent. Counting does not delay the
-  // download. The flush has one 20s deadline (under maxDuration 30s); hung
-  // puts are aborted and retried on the same pathname until that deadline.
+  // download. The whole after() drain shares one 20s deadline (under
+  // maxDuration 30s): queued flushes consume the remainder, and a flush is
+  // not started under 10ms remaining. Hung puts are aborted and retried on
+  // the same pathname until that deadline.
   after(() =>
     recordDownloadClick({
       channel,

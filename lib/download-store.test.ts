@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BlobUnknownError } from "@vercel/blob";
 import {
+  LOOKBACK_DAYS,
   RETENTION_DAYS,
   applyEvents,
   batchPath,
@@ -184,25 +185,46 @@ function hangUntilAbort(signal: AbortSignal | undefined, onLand?: () => void): P
   });
 }
 
-test("a hanging put consumes the shared flush deadline and leaves no orphan write", async () => {
+type AbortProbe = { called: number; signalDefined: number; aborted: number };
+
+function emptyProbe(): AbortProbe {
+  return { called: 0, signalDefined: 0, aborted: 0 };
+}
+
+function trackAbort(probe: AbortProbe, signal: AbortSignal | undefined): void {
+  probe.called += 1;
+  if (signal == null) return;
+  probe.signalDefined += 1;
+  const mark = () => {
+    probe.aborted += 1;
+  };
+  if (signal.aborted) {
+    mark();
+    return;
+  }
+  signal.addEventListener("abort", mark);
+}
+
+test("a hanging put consumes the shared write budget once, not per attempt", async () => {
   const io = createMemoryBlob();
-  let aborted = 0;
+  const putProbe = emptyProbe();
   const hung: BlobEventIO = {
     ...io,
     async put(pathname, body, signal) {
-      signal?.addEventListener("abort", () => {
-        aborted += 1;
-      });
+      trackAbort(putProbe, signal);
       return hangUntilAbort(signal, () => io.files.set(pathname, body));
     },
   };
+  const timeoutMs = 40;
   const started = Date.now();
   await assert.rejects(() =>
-    persistEvents(click(1), { io: hung, now, timeoutMs: 80, maxAttempts: 4, sleep: async () => {} }),
+    persistEvents(click(1), { io: hung, now, timeoutMs, maxAttempts: 4, sleep: async () => {} }),
   );
   const elapsed = Date.now() - started;
-  assert.ok(elapsed < 400, `flush must end within the 80ms deadline, took ${elapsed}ms`);
-  assert.ok(aborted >= 1, "deadline must abort the in-flight put");
+  assert.ok(elapsed < 2 * timeoutMs, `shared 40ms budget, took ${elapsed}ms (per-attempt mutant is ~160ms)`);
+  assert.equal(putProbe.called, 1, "budget leftover under 10ms must not start another put");
+  assert.equal(putProbe.signalDefined, 1, "put must receive a signal");
+  assert.equal(putProbe.aborted, 1, "exactly one in-flight put is aborted");
   await new Promise((r) => setTimeout(r, 60));
   assert.equal(io.files.size, 0, "aborted put must not land later");
 });
@@ -358,34 +380,158 @@ test("mergeDays adds batches and does not reset", () => {
   assert.equal(merged.sources.b, 3);
 });
 
-test("hung list returns a read error within the deadline, not an empty day", async () => {
+test("hung list returns a read error and the list signal is defined then aborted", async () => {
   const io = createMemoryBlob();
   io.files.set(batchPath("2026-10-30", "a"), JSON.stringify({ date: "2026-10-30", total: 4, channels: {}, sources: {}, paths: {} }));
+  const listProbe = emptyProbe();
   const hung: BlobEventIO = {
     ...io,
     async list(_prefix, _cursor, signal) {
+      trackAbort(listProbe, signal);
       return hangUntilAbort(signal);
     },
   };
+  const timeoutMs = 50;
   const started = Date.now();
-  const read = await readCountedDay("2026-10-30", { io: hung, now, timeoutMs: 50 });
-  assert.ok(Date.now() - started < 400, "list hang must not wait on the platform timeout");
+  const read = await readCountedDay("2026-10-30", { io: hung, now, timeoutMs });
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 2 * timeoutMs, `list hang must end within the budget, took ${elapsed}ms`);
   assert.equal(read.status, "error");
+  assert.equal(listProbe.called, 1);
+  assert.equal(listProbe.signalDefined, 1, "listAll must pass signal; this fails if list is called without it");
+  assert.equal(listProbe.aborted, 1, "deadline must abort list; Promise.race alone is not enough");
 });
 
-test("hung get returns a read error within the deadline, not an empty day", async () => {
+test("hung get returns a read error and both list and get receive an aborted signal", async () => {
   const io = createMemoryBlob();
   io.files.set(batchPath("2026-10-30", "a"), JSON.stringify({ date: "2026-10-30", total: 4, channels: {}, sources: {}, paths: {} }));
+  const listProbe = emptyProbe();
+  const getProbe = emptyProbe();
   const hung: BlobEventIO = {
     ...io,
+    async list(prefix, cursor, signal) {
+      trackAbort(listProbe, signal);
+      return io.list(prefix, cursor, signal);
+    },
     async get(_pathname, signal) {
+      trackAbort(getProbe, signal);
       return hangUntilAbort(signal);
     },
   };
+  const timeoutMs = 50;
   const started = Date.now();
-  const read = await readCountedDay("2026-10-30", { io: hung, now, timeoutMs: 50 });
-  assert.ok(Date.now() - started < 400, "get hang must not wait on the platform timeout");
+  const read = await readCountedDay("2026-10-30", { io: hung, now, timeoutMs });
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 2 * timeoutMs, `get hang must end within the budget, took ${elapsed}ms`);
   assert.equal(read.status, "error");
+  assert.equal(listProbe.called, 1);
+  assert.equal(listProbe.signalDefined, 1, "listAll must pass signal");
+  assert.equal(getProbe.called, 1);
+  assert.equal(getProbe.signalDefined, 1, "io.get must receive signal; this fails if get is called without it");
+  assert.equal(getProbe.aborted, 1, "deadline must abort get; Promise.race alone is not enough");
+});
+
+test("two queued hanging flushes share one drain budget and skip the second under 10ms leftover", async () => {
+  const io = createMemoryBlob();
+  const putProbe = emptyProbe();
+  const hung: BlobEventIO = {
+    ...io,
+    async put(_pathname, _body, signal) {
+      trackAbort(putProbe, signal);
+      return hangUntilAbort(signal);
+    },
+  };
+  const timeoutMs = 50;
+  const rec = createRecorder({ io: hung, now, prune: false, timeoutMs, maxAttempts: 4, sleep: async () => {} });
+  const started = Date.now();
+  const first = rec.record({ channel: "stable", source: "one", path: "/" });
+  while (putProbe.called < 1) await new Promise((r) => setTimeout(r, 1));
+  const second = rec.record({ channel: "stable", source: "two", path: "/" });
+  await Promise.all([first, second]);
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 2 * timeoutMs, `two queued flushes must end within one ${timeoutMs}ms drain, took ${elapsed}ms`);
+  assert.equal(putProbe.called, 1, "second flush must not start when leftover is under 10ms");
+  assert.equal(putProbe.signalDefined, 1);
+  assert.equal(putProbe.aborted, 1);
+});
+
+test("two queued flushes: the second consumes the drain remainder, not a fresh timeoutMs", async () => {
+  const io = createMemoryBlob();
+  const putProbe = emptyProbe();
+  let puts = 0;
+  const firstDelayMs = 40;
+  const hung: BlobEventIO = {
+    ...io,
+    async put(pathname, body, signal) {
+      puts += 1;
+      trackAbort(putProbe, signal);
+      if (puts === 1) {
+        await new Promise((r) => setTimeout(r, firstDelayMs));
+        return io.put(pathname, body, signal);
+      }
+      return hangUntilAbort(signal);
+    },
+  };
+  const timeoutMs = 80;
+  const rec = createRecorder({ io: hung, now, prune: false, timeoutMs, maxAttempts: 1, sleep: async () => {} });
+  const started = Date.now();
+  const first = rec.record({ channel: "stable", source: "one", path: "/" });
+  while (puts < 1) await new Promise((r) => setTimeout(r, 1));
+  const second = rec.record({ channel: "stable", source: "two", path: "/" });
+  await Promise.all([first, second]);
+  const elapsed = Date.now() - started;
+  assert.ok(
+    elapsed < timeoutMs + 40,
+    `second flush must use the leftover (~40ms), not a fresh ${timeoutMs}ms; took ${elapsed}ms`,
+  );
+  assert.ok(elapsed >= firstDelayMs, `elapsed ${elapsed}ms should include the first flush`);
+  assert.equal(puts, 2, "both flushes must run so a per-flush deadline would be visible");
+  assert.equal(putProbe.signalDefined, 2);
+  assert.equal(putProbe.aborted, 1, "only the second (hanging) put is aborted");
+});
+
+test("readStats hanging list fails within the shared 7-day budget, never with empty days", async () => {
+  const listProbe = emptyProbe();
+  const signals = new Set<AbortSignal>();
+  const hung: BlobEventIO = {
+    async put() {},
+    async get() {
+      return null;
+    },
+    async list(_prefix, _cursor, signal) {
+      trackAbort(listProbe, signal);
+      if (signal) signals.add(signal);
+      return hangUntilAbort(signal);
+    },
+    async del() {},
+  };
+  const readTimeoutMs = 80;
+  const rec = createRecorder({
+    io: hung,
+    now,
+    prune: false,
+    timeoutMs: 80,
+    readTimeoutMs,
+    sleep: async () => {},
+  });
+  const started = Date.now();
+  await assert.rejects(() => rec.readStats(), /deadline exceeded|aborted/i);
+  const elapsed = Date.now() - started;
+  assert.ok(
+    elapsed < 2 * readTimeoutMs,
+    `7 hanging days must share one ${readTimeoutMs}ms budget (not 7×); took ${elapsed}ms`,
+  );
+  assert.ok(listProbe.called >= 1);
+  assert.equal(listProbe.signalDefined, listProbe.called, "every day list must receive the shared signal");
+  assert.ok(listProbe.aborted >= 1, "shared deadline must abort in-flight lists");
+  assert.equal(signals.size, 1, "one signal across all LOOKBACK_DAYS; per-day timers would create many");
+  assert.ok(listProbe.called <= LOOKBACK_DAYS);
+});
+
+test("download-stats route declares maxDuration for one shared read, not 7×10s", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../app/api/download-stats/route.ts", import.meta.url), "utf8");
+  assert.match(src, /export const maxDuration = 15/);
 });
 
 function createPagedBlob(files: Map<string, string>, pageSize = LIST_PAGE): BlobEventIO & { lists: number } {

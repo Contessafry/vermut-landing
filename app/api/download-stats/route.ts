@@ -2,6 +2,9 @@ import { timingSafeEqual } from "node:crypto";
 import { connection, NextResponse } from "next/server";
 import { isBlobConfigured, readStats } from "@/lib/download-store";
 
+/** Covers one 10s shared read across all 7 days, with headroom. Not 7×10s. */
+export const maxDuration = 15;
+
 function secretsEqual(provided: string, expected: string): boolean {
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
@@ -24,6 +27,8 @@ function providedSecret(request: Request): string | null {
  * Unconfigured secret → 404 (the endpoint does not advertise itself).
  * No date query: out-of-retention and invalid-date cases are not reachable here.
  * They are handled by readCountedDay() for the later range-query PR.
+ * readStats() uses one 10s deadline for all 7 days; expiry is 503 blob_unavailable,
+ * never a day of zeros.
  */
 export async function GET(request: Request) {
   await connection();
