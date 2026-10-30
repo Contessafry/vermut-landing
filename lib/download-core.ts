@@ -72,6 +72,7 @@ export function sanitizePath(raw: string | null | undefined): string {
     return "other";
   }
   path = path.split("?")[0]?.split("#")[0] ?? "/";
+  path = path.toLowerCase();
   if (!path.startsWith("/")) path = `/${path}`;
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
   if (path.length > PATH_MAX || !PATH.test(path)) return "other";

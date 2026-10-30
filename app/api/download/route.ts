@@ -22,8 +22,9 @@ async function redirectToGithub(request: Request) {
 
 export async function GET(request: Request) {
   const { url, channel, response } = await redirectToGithub(request);
-  // after() runs once the 302 has been sent. Counting must never delay the
-  // download — a hung Blob write is capped inside recordDownloadClick.
+  // after() runs once the 302 has been sent. Counting does not delay the
+  // download. A hung Blob put is aborted via AbortSignal and retried on the
+  // same batch pathname (idempotent overwrite).
   after(() =>
     recordDownloadClick({
       channel,

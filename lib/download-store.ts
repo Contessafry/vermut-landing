@@ -1,13 +1,21 @@
 /**
- * Daily download counters in Vercel Blob. One JSON object per UTC day.
- * Writes use ifMatch/etag so concurrent isolates cannot clobber each other.
- * An in-process queue still coalesces clicks on the same isolate; correctness
- * comes from the etag, not from the queue.
+ * Append-only download event log in Vercel Blob.
+ *
+ * Each isolate flush writes one new object:
+ *   download-counts/YYYY-MM-DD/<batchId>.json
+ * The batch id is generated once (not per retry). The same pathname can be
+ * overwritten with the same body, so a retry after an ambiguous timeout does
+ * not double-count. There is no shared object, no etag, no ifMatch.
+ *
+ * /api/download-stats lists each day prefix (paginated) and sums the batches.
+ * Objects older than RETENTION_DAYS are deleted (delete is free). No daily
+ * rollup — a rollup would be a shared write.
  *
  * If Blob is not configured, recordDownloadClick() skips counting. The download
  * redirect must not depend on this module succeeding.
  */
-import { BlobAccessError, BlobPreconditionFailedError, get, put } from "@vercel/blob";
+import { BlobAccessError, del, get, list, put } from "@vercel/blob";
+import { randomUUID } from "node:crypto";
 import type { DownloadChannel } from "./download-core";
 
 export type ClickEvent = {
@@ -25,44 +33,44 @@ export type DayCounts = {
   paths: Record<string, number>;
 };
 
-export type ReadDayResult =
-  | { kind: "missing" }
-  | { kind: "ok"; day: DayCounts; etag: string }
-  | { kind: "corrupt"; text: string; etag: string }
-  | { kind: "error"; error: unknown };
+export type BatchRecord = DayCounts & { batchId: string };
 
-export type BlobDayIO = {
-  readDay: (date: string) => Promise<ReadDayResult>;
-  writeDay: (day: DayCounts, ifMatch: string | null) => Promise<void>;
-  saveCorrupt: (date: string, text: string) => Promise<void>;
+export type BlobEventIO = {
+  put: (pathname: string, body: string, signal?: AbortSignal) => Promise<void>;
+  get: (pathname: string, signal?: AbortSignal) => Promise<string | null>;
+  list: (prefix: string, cursor?: string, signal?: AbortSignal) => Promise<{ pathnames: string[]; cursor?: string }>;
+  del: (pathnames: string[], signal?: AbortSignal) => Promise<void>;
 };
 
 export type PersistOptions = {
-  io?: BlobDayIO;
+  io?: BlobEventIO;
+  batchId?: string;
   maxAttempts?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
-  /** Cap a hung read/write. `0` disables. Default WRITE_TIMEOUT_MS. */
+  /** Per-attempt abort budget. Default WRITE_BUDGET_MS. */
   timeoutMs?: number;
 };
 
-const PREFIX = "download-counts";
+export type RecorderOptions = PersistOptions & {
+  prune?: boolean;
+};
+
+export const PREFIX = "download-counts";
+export const RETENTION_DAYS = 90;
+export const LIST_PAGE = 1000;
 const KEY_CAP = 200;
 const LOOKBACK_DAYS = 7;
-const MAX_ATTEMPTS = 5;
-/** Hung Blob I/O must not keep the isolate (or a test) waiting. */
-export const WRITE_TIMEOUT_MS = 4000;
+const MAX_ATTEMPTS = 4;
+/** Counting runs in after(); this does not delay the 302. Leave headroom under maxDuration 30s. */
+export const WRITE_BUDGET_MS = 20_000;
 
 type Access = "public" | "private";
 
 let access: Access = process.env.BLOB_ACCESS === "public" ? "public" : "private";
 let accessLocked = process.env.BLOB_ACCESS === "public" || process.env.BLOB_ACCESS === "private";
 const warnedKinds = new Set<string>();
-
-let queue: ClickEvent[] = [];
-let draining: Promise<void> | null = null;
-
-const pathnameFor = (date: string) => `${PREFIX}/${date}.json`;
+const prunedDates = new Set<string>();
 
 export const utcDate = (ms = Date.now()) => new Date(ms).toISOString().slice(0, 10);
 
@@ -81,6 +89,51 @@ export function emptyDay(date: string, now = Date.now()): DayCounts {
   return { date, updatedAt: new Date(now).toISOString(), total: 0, channels: {}, sources: {}, paths: {} };
 }
 
+export function batchPath(date: string, batchId: string): string {
+  return `${PREFIX}/${date}/${batchId}.json`;
+}
+
+export function dayPrefix(date: string): string {
+  return `${PREFIX}/${date}/`;
+}
+
+const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Calendar-true UTC date. Rejects 2026-02-31: we build the UTC date and require
+ * the fields to round-trip. `new Date('2026-02-31')` is not used.
+ */
+export function parseUtcDate(raw: string): { ok: true; date: string } | { ok: false } {
+  const m = DATE_RE.exec(raw.trim());
+  if (!m) return { ok: false };
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
+    return { ok: false };
+  }
+  return { ok: true, date: `${m[1]}-${m[2]}-${m[3]}` };
+}
+
+export function utcDayMs(date: string): number {
+  return Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)));
+}
+
+/** Whole UTC days from `date` to the UTC day of `now`. Negative = future. */
+export function daysFromToday(date: string, now = Date.now()): number {
+  const today = utcDayMs(utcDate(now));
+  return Math.round((today - utcDayMs(date)) / 86_400_000);
+}
+
+export function isOutOfRetention(date: string, now = Date.now()): boolean {
+  return daysFromToday(date, now) > RETENTION_DAYS;
+}
+
+export function isFutureDate(date: string, now = Date.now()): boolean {
+  return daysFromToday(date, now) < 0;
+}
+
 function bump(map: Record<string, number>, key: string) {
   if (map[key] != null) {
     map[key] += 1;
@@ -91,6 +144,20 @@ function bump(map: Record<string, number>, key: string) {
     return;
   }
   map[key] = 1;
+}
+
+function addMaps(into: Record<string, number>, from: Record<string, number>) {
+  for (const [k, n] of Object.entries(from)) {
+    if (into[k] != null) {
+      into[k] += n;
+      continue;
+    }
+    if (Object.keys(into).length >= KEY_CAP) {
+      into.other = (into.other ?? 0) + n;
+      continue;
+    }
+    into[k] = n;
+  }
 }
 
 /** Pure: apply a batch of clicks onto a day's totals. Never mutates `day`. */
@@ -108,6 +175,18 @@ export function applyEvents(day: DayCounts, events: ClickEvent[], now = Date.now
     bump(next.channels, e.channel);
     bump(next.sources, e.source);
     bump(next.paths, e.path);
+  }
+  return next;
+}
+
+export function mergeDays(date: string, batches: DayCounts[], now = Date.now()): DayCounts {
+  const next = emptyDay(date, now);
+  for (const b of batches) {
+    next.total += b.total;
+    addMaps(next.channels, b.channels);
+    addMaps(next.sources, b.sources);
+    addMaps(next.paths, b.paths);
+    if (b.updatedAt > next.updatedAt) next.updatedAt = b.updatedAt;
   }
   return next;
 }
@@ -147,12 +226,6 @@ export function parseDayCounts(text: string, date: string): ParseDayResult {
   }
 }
 
-export function isConflictError(error: unknown): boolean {
-  if (error instanceof BlobPreconditionFailedError) return true;
-  const msg = error instanceof Error ? error.message : String(error);
-  return /precondition|409|already exists|cannot overwrite|if-?match/i.test(msg);
-}
-
 function isAccessMismatch(error: unknown): boolean {
   if (error instanceof BlobAccessError) return true;
   const msg = error instanceof Error ? error.message : String(error);
@@ -174,199 +247,178 @@ async function withAccess<T>(fn: (a: Access) => Promise<T>): Promise<T> {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-class PersistTimeoutError extends Error {
-  constructor(ms: number) {
-    super(`blob persist timed out after ${ms}ms`);
-    this.name = "PersistTimeoutError";
-  }
-}
-
-export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  if (ms <= 0) return promise;
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new PersistTimeoutError(ms)), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
-export async function vercelReadDay(date: string): Promise<ReadDayResult> {
-  let result: Awaited<ReturnType<typeof get>>;
+export async function runWithDeadline<T>(ms: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), Math.max(1, ms));
   try {
-    result = await withAccess((a) => get(pathnameFor(date), { access: a, useCache: false }));
-  } catch (error) {
-    return { kind: "error", error };
+    return await fn(ac.signal);
+  } finally {
+    clearTimeout(timer);
   }
-  if (result === null) return { kind: "missing" };
+}
+
+export async function vercelPut(pathname: string, body: string, signal?: AbortSignal): Promise<void> {
+  await withAccess((a) =>
+    put(pathname, body, {
+      access: a,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+      cacheControlMaxAge: 60,
+      abortSignal: signal,
+    }),
+  );
+}
+
+export async function vercelGet(pathname: string, signal?: AbortSignal): Promise<string | null> {
+  const result = await withAccess((a) => get(pathname, { access: a, useCache: false, abortSignal: signal }));
+  if (result === null) return null;
   if (result.statusCode !== 200 || !result.stream) {
-    return { kind: "error", error: new Error(`blob get status ${result.statusCode}`) };
+    throw new Error(`blob get status ${result.statusCode}`);
   }
-  const text = await new Response(result.stream).text();
-  const parsed = parseDayCounts(text, date);
-  if (!parsed.ok) return { kind: "corrupt", text, etag: result.blob.etag };
-  return { kind: "ok", day: parsed.day, etag: result.blob.etag };
+  return await new Response(result.stream).text();
 }
 
-export async function vercelWriteDay(day: DayCounts, ifMatch: string | null): Promise<void> {
-  await withAccess((a) =>
-    put(pathnameFor(day.date), JSON.stringify(day), {
-      access: a,
-      addRandomSuffix: false,
-      allowOverwrite: ifMatch !== null,
-      ...(ifMatch ? { ifMatch } : {}),
-      contentType: "application/json",
-      cacheControlMaxAge: 60,
-    }),
-  );
+export async function vercelList(
+  prefix: string,
+  cursor?: string,
+  signal?: AbortSignal,
+): Promise<{ pathnames: string[]; cursor?: string }> {
+  const page = await list({ prefix, cursor, limit: LIST_PAGE, abortSignal: signal });
+  return {
+    pathnames: page.blobs.map((b) => b.pathname),
+    cursor: page.hasMore ? page.cursor : undefined,
+  };
 }
 
-export async function vercelSaveCorrupt(date: string, text: string): Promise<void> {
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  await withAccess((a) =>
-    put(`${PREFIX}/corrupt/${date}-${stamp}.json`, text, {
-      access: a,
-      addRandomSuffix: false,
-      contentType: "application/json",
-      cacheControlMaxAge: 60,
-    }),
-  );
+export async function vercelDel(pathnames: string[], signal?: AbortSignal): Promise<void> {
+  if (!pathnames.length) return;
+  await del(pathnames, { abortSignal: signal });
 }
 
-const vercelIO: BlobDayIO = {
-  readDay: vercelReadDay,
-  writeDay: vercelWriteDay,
-  saveCorrupt: vercelSaveCorrupt,
+export const vercelIO: BlobEventIO = {
+  put: vercelPut,
+  get: vercelGet,
+  list: vercelList,
+  del: vercelDel,
 };
 
+export type CountedDay =
+  | { status: "ok"; day: DayCounts; batches: number }
+  | { status: "out_of_retention"; date: string; retentionDays: number }
+  | { status: "invalid_date"; date: string }
+  | { status: "error"; error: unknown };
+
+async function listAll(io: BlobEventIO, prefix: string, signal?: AbortSignal): Promise<string[]> {
+  const pathnames: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await io.list(prefix, cursor, signal);
+    pathnames.push(...page.pathnames);
+    cursor = page.cursor;
+  } while (cursor);
+  return pathnames;
+}
+
 /**
- * Read-modify-write one day's JSON with etag/ifMatch. On 409, re-read and retry
- * with backoff (max 5). Never overwrites a higher same-day total with a lower one.
- * Network / 5xx / corrupt JSON skip the batch instead of resetting the file to 0.
+ * Read one UTC day. Never returns a zero DayCounts for a date we cannot know:
+ * out-of-retention and invalid dates are distinct statuses, not empty days.
+ * Future dates are valid empty days (no clicks can exist yet).
  */
-async function persistEventsOnce(events: ClickEvent[], options: PersistOptions): Promise<void> {
+export async function readCountedDay(
+  date: string,
+  options: { io?: BlobEventIO; now?: () => number } = {},
+): Promise<CountedDay> {
+  const parsed = parseUtcDate(date);
+  if (!parsed.ok) return { status: "invalid_date", date };
+  const io = options.io ?? vercelIO;
+  const now = options.now ?? Date.now;
+  if (isOutOfRetention(parsed.date, now())) {
+    return { status: "out_of_retention", date: parsed.date, retentionDays: RETENTION_DAYS };
+  }
+  if (isFutureDate(parsed.date, now())) {
+    return { status: "ok", day: emptyDay(parsed.date, now()), batches: 0 };
+  }
+  let pathnames: string[];
+  try {
+    pathnames = await listAll(io, dayPrefix(parsed.date));
+  } catch (error) {
+    return { status: "error", error };
+  }
+  const batches: DayCounts[] = [];
+  for (const pathname of pathnames) {
+    try {
+      const text = await io.get(pathname);
+      if (text == null) continue;
+      const parsedBatch = parseDayCounts(text, parsed.date);
+      if (!parsedBatch.ok) {
+        warnOnce("batch_corrupt", `[download] skipping unreadable batch ${pathname}.`);
+        continue;
+      }
+      batches.push(parsedBatch.day);
+    } catch (error) {
+      warnOnce(
+        "batch_read",
+        `[download] skipping unread batch ${pathname}. ${error instanceof Error ? error.message : ""}`.trim(),
+      );
+    }
+  }
+  return { status: "ok", day: mergeDays(parsed.date, batches, now()), batches: batches.length };
+}
+
+/**
+ * Write one flush. Pathname is `batchId` (generated by the caller, once).
+ * Retries reuse that pathname and the same body. A hung put is aborted via signal.
+ */
+export async function persistEvents(events: ClickEvent[], options: PersistOptions = {}): Promise<void> {
+  if (!events.length) return;
   const io = options.io ?? vercelIO;
   const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
+  const timeoutMs = options.timeoutMs ?? WRITE_BUDGET_MS;
   const date = utcDate(now());
+  const batchId = options.batchId ?? randomUUID();
+  const pathname = batchPath(date, batchId);
+  const body = JSON.stringify({ ...applyEvents(emptyDay(date, now()), events, now()), batchId });
 
-  let floor = 0;
+  let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const read = await io.readDay(date);
-    if (read.kind === "error") {
-      throw read.error instanceof Error ? read.error : new Error(String(read.error));
-    }
-    if (read.kind === "corrupt") {
-      try {
-        await io.saveCorrupt(date, read.text);
-      } catch (error) {
-        warnOnce(
-          "corrupt_backup",
-          `[download] could not back up corrupt day ${date}; skipping count. ${error instanceof Error ? error.message : ""}`.trim(),
-        );
-      }
-      warnOnce("corrupt", `[download] day ${date} JSON is unreadable; left in place and skipped this batch.`);
-      return;
-    }
-
-    const current = read.kind === "ok" ? read.day : emptyDay(date, now());
-    const etag = read.kind === "ok" ? read.etag : null;
-    const next = applyEvents(current, events, now());
-
-    if (next.date === current.date && next.total < current.total) {
-      warnOnce(
-        "lower_total",
-        `[download] refusing to write total ${next.total} over existing ${current.total} for ${date}; skipped batch.`,
-      );
-      return;
-    }
-    if (next.date === date && next.total < floor) {
-      warnOnce(
-        "lower_total",
-        `[download] re-read total would write ${next.total} after intending ${floor} for ${date}; skipped batch to avoid clobber.`,
-      );
-      return;
-    }
-    floor = Math.max(floor, next.total);
-
     try {
-      await io.writeDay(next, etag);
+      await runWithDeadline(timeoutMs, (signal) => io.put(pathname, body, signal));
       return;
     } catch (error) {
-      if (isConflictError(error) && attempt < maxAttempts) {
-        const backoff = Math.min(400, 25 * 2 ** (attempt - 1));
-        await sleep(backoff + Math.floor(Math.random() * backoff));
-        continue;
-      }
-      if (isConflictError(error)) {
-        warnOnce("conflict", `[download] etag conflict on ${date} after ${maxAttempts} attempts; skipped batch.`);
-        return;
-      }
-      throw error;
+      lastError = error;
+      if (attempt >= maxAttempts) break;
+      const backoff = Math.min(400, 25 * 2 ** (attempt - 1));
+      await sleep(backoff);
     }
   }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-/**
- * Read-modify-write one day's JSON with etag/ifMatch. On 409, re-read and retry
- * with backoff (max 5). Never overwrites a higher same-day total with a lower one.
- * Network / 5xx / corrupt JSON skip the batch instead of resetting the file to 0.
- * A hung Blob call is abandoned after timeoutMs (default 4s) with a warn.
- */
-export async function persistEvents(events: ClickEvent[], options: PersistOptions = {}): Promise<void> {
-  if (!events.length) return;
-  const timeoutMs = options.timeoutMs ?? WRITE_TIMEOUT_MS;
-  try {
-    await withTimeout(persistEventsOnce(events, options), timeoutMs);
-  } catch (error) {
-    if (error instanceof PersistTimeoutError) {
-      warnOnce("write_timeout", `[download] Blob write timed out after ${timeoutMs}ms; skipped batch.`);
-      return;
+export async function pruneExpired(
+  io: BlobEventIO,
+  now = Date.now(),
+): Promise<void> {
+  for (let age = RETENTION_DAYS + 1; age <= RETENTION_DAYS + 7; age++) {
+    const date = utcDate(now - age * 86_400_000);
+    if (prunedDates.has(date)) continue;
+    try {
+      const pathnames = await listAll(io, dayPrefix(date));
+      await io.del(pathnames);
+      prunedDates.add(date);
+    } catch (error) {
+      warnOnce(
+        "prune",
+        `[download] prune of ${date} failed. ${error instanceof Error ? error.message : ""}`.trim(),
+      );
     }
-    throw error;
   }
-}
-
-async function drain(): Promise<void> {
-  while (queue.length) {
-    const batch = queue;
-    queue = [];
-    await persistEvents(batch);
-  }
-}
-
-/** Queue one click and flush the day's JSON. Never throws to the caller. */
-export async function recordDownloadClick(event: ClickEvent): Promise<void> {
-  if (!isBlobConfigured()) {
-    warnOnce("unconfigured", "[download] Vercel Blob is not configured; skipping count, redirect still sent.");
-    return;
-  }
-  queue.push(event);
-  if (!draining) {
-    draining = drain()
-      .catch((error) => {
-        const kind = error instanceof Error ? error.name || "write_failed" : "write_failed";
-        warnOnce(
-          kind,
-          `[download] Vercel Blob write failed; skipping count, redirect still sent. ${error instanceof Error ? error.message : ""}`.trim(),
-        );
-      })
-      .finally(() => {
-        draining = null;
-      });
-  }
-  await draining;
 }
 
 export type StatsPayload = {
+  retentionDays: number;
   today: DayCounts;
   last7Days: {
     from: string;
@@ -379,49 +431,121 @@ export type StatsPayload = {
   };
 };
 
-function sumMaps(into: Record<string, number>, from: Record<string, number>) {
-  for (const [k, n] of Object.entries(from)) into[k] = (into[k] ?? 0) + n;
+export type ClickRecorder = {
+  record: (event: ClickEvent) => Promise<void>;
+  readDay: (date: string) => Promise<CountedDay>;
+  readStats: () => Promise<StatsPayload>;
+};
+
+/**
+ * Per-isolate queue + one Blob object per flush. A failed flush does not drop
+ * events that arrived while it was in flight: the loop continues on `queue`.
+ */
+export function createRecorder(options: RecorderOptions): ClickRecorder {
+  const io = options.io ?? vercelIO;
+  const now = options.now ?? Date.now;
+  const shouldPrune = options.prune !== false;
+  let queue: ClickEvent[] = [];
+  let draining: Promise<void> | null = null;
+
+  async function drain(): Promise<void> {
+    while (queue.length) {
+      const events = queue;
+      queue = [];
+      const batchId = randomUUID();
+      try {
+        await persistEvents(events, { ...options, io, batchId, now });
+        if (shouldPrune) void pruneExpired(io, now());
+      } catch (error) {
+        const kind = error instanceof Error ? error.name || "write_failed" : "write_failed";
+        warnOnce(
+          kind,
+          `[download] Vercel Blob write failed; skipping this flush. ${error instanceof Error ? error.message : ""}`.trim(),
+        );
+      }
+    }
+  }
+
+  function kick(): Promise<void> {
+    if (draining) {
+      return draining.then(() => (queue.length ? kick() : undefined));
+    }
+    draining = drain()
+      .catch((error) => {
+        warnOnce(
+          "drain",
+          `[download] drain failed. ${error instanceof Error ? error.message : ""}`.trim(),
+        );
+      })
+      .finally(() => {
+        draining = null;
+      });
+    return draining.then(() => (queue.length ? kick() : undefined));
+  }
+
+  return {
+    record(event) {
+      queue.push(event);
+      return kick();
+    },
+    readDay(date) {
+      return readCountedDay(date, { io, now });
+    },
+    async readStats() {
+      const today = utcDate(now());
+      const dates: string[] = [];
+      for (let i = LOOKBACK_DAYS - 1; i >= 0; i--) {
+        dates.push(utcDate(now() - i * 86_400_000));
+      }
+      const days: DayCounts[] = [];
+      for (const d of dates) {
+        const read = await readCountedDay(d, { io, now });
+        if (read.status === "error") {
+          throw read.error instanceof Error ? read.error : new Error(String(read.error));
+        }
+        if (read.status !== "ok") {
+          throw new Error(`stats window hit ${read.status} for ${d}`);
+        }
+        days.push(read.day);
+      }
+      const channels: Record<string, number> = {};
+      const sources: Record<string, number> = {};
+      const paths: Record<string, number> = {};
+      let total = 0;
+      for (const d of days) {
+        total += d.total;
+        addMaps(channels, d.channels);
+        addMaps(sources, d.sources);
+        addMaps(paths, d.paths);
+      }
+      return {
+        retentionDays: RETENTION_DAYS,
+        today: days[days.length - 1] ?? emptyDay(today, now()),
+        last7Days: {
+          from: dates[0] ?? today,
+          to: today,
+          total,
+          channels,
+          sources,
+          paths,
+          days,
+        },
+      };
+    },
+  };
+}
+
+const live = createRecorder({ io: vercelIO, prune: true });
+
+/** Queue one click and flush a batch object. Never throws to the caller. */
+export async function recordDownloadClick(event: ClickEvent): Promise<void> {
+  if (!isBlobConfigured()) {
+    warnOnce("unconfigured", "[download] Vercel Blob is not configured; skipping count, redirect still sent.");
+    return;
+  }
+  await live.record(event);
 }
 
 export async function readStats(): Promise<StatsPayload> {
-  const today = utcDate();
-  const dates: string[] = [];
-  for (let i = LOOKBACK_DAYS - 1; i >= 0; i--) {
-    dates.push(utcDate(Date.now() - i * 86_400_000));
-  }
-  const days: DayCounts[] = [];
-  for (const d of dates) {
-    const read = await vercelReadDay(d);
-    if (read.kind === "error") {
-      throw read.error instanceof Error ? read.error : new Error(String(read.error));
-    }
-    if (read.kind === "corrupt") {
-      warnOnce("stats_corrupt", `[download] stats: skipping unreadable day ${d}.`);
-      days.push(emptyDay(d));
-      continue;
-    }
-    days.push(read.kind === "ok" ? read.day : emptyDay(d));
-  }
-  const channels: Record<string, number> = {};
-  const sources: Record<string, number> = {};
-  const paths: Record<string, number> = {};
-  let total = 0;
-  for (const d of days) {
-    total += d.total;
-    sumMaps(channels, d.channels);
-    sumMaps(sources, d.sources);
-    sumMaps(paths, d.paths);
-  }
-  return {
-    today: days[days.length - 1] ?? emptyDay(today),
-    last7Days: {
-      from: dates[0] ?? today,
-      to: today,
-      total,
-      channels,
-      sources,
-      paths,
-      days,
-    },
-  };
+  return live.readStats();
 }

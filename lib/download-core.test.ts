@@ -63,6 +63,7 @@ test("sanitizeSource and sanitizePath reject junk", () => {
   assert.equal(sanitizeSource("utm:reddit/social"), "utm:reddit/social");
   assert.equal(sanitizeSource("javascript:alert(1)"), "unknown");
   assert.equal(sanitizePath("/it/guides"), "/it/guides");
+  assert.equal(sanitizePath("/IT"), "/it");
   assert.equal(sanitizePath("/it/?x=1#y"), "/it");
   assert.equal(sanitizePath("https://evil.example/"), "other");
   assert.equal(sanitizePath("../../etc/passwd"), "other");
