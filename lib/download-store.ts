@@ -76,7 +76,7 @@ const KEY_CAP = 200;
 export const LOOKBACK_DAYS = 7;
 const MAX_ATTEMPTS = 4;
 /**
- * Shared deadline for the whole after() drain — every flush and every retry
+ * Shared deadline for the whole after() drain — every flush, retry, and prune
  * consume whatever time is left; under 10ms remaining no put is started.
  * 20s total, not 20s per attempt and not 20s per flush. Route maxDuration is
  * 30s; 10s of headroom is left so after() is not killed mid-write.
@@ -452,15 +452,19 @@ export async function persistEvents(events: ClickEvent[], options: PersistOption
 export async function pruneExpired(
   io: BlobEventIO,
   now = Date.now(),
+  signal?: AbortSignal,
 ): Promise<void> {
   for (let age = RETENTION_DAYS + 1; age <= RETENTION_DAYS + 7; age++) {
+    if (signal?.aborted) return;
     const date = utcDate(now - age * 86_400_000);
     if (prunedDates.has(date)) continue;
     try {
-      const pathnames = await listAll(io, dayPrefix(date));
-      await io.del(pathnames);
+      const pathnames = await listAll(io, dayPrefix(date), signal);
+      if (signal?.aborted) return;
+      await io.del(pathnames, signal);
       prunedDates.add(date);
     } catch (error) {
+      if (signal?.aborted) return;
       warnOnce(
         "prune",
         `[download] prune of ${date} failed. ${error instanceof Error ? error.message : ""}`.trim(),
@@ -504,8 +508,20 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
   let draining: Promise<void> | null = null;
   /** One wall-clock cut-off for every flush kicked while this isolate is draining. */
   let waveDeadlineAt: number | null = null;
+  let waveAbort: AbortController | null = null;
+  let waveAbortTimer: ReturnType<typeof setTimeout> | undefined;
 
-  async function drain(deadlineAt: number): Promise<void> {
+  function beginWave(end: number): AbortSignal {
+    if (waveAbortTimer) clearTimeout(waveAbortTimer);
+    waveAbort?.abort();
+    waveAbort = new AbortController();
+    const timer = setTimeout(() => waveAbort?.abort(), Math.max(1, end - Date.now()));
+    timer.unref?.();
+    waveAbortTimer = timer;
+    return waveAbort.signal;
+  }
+
+  async function drain(deadlineAt: number, signal: AbortSignal): Promise<void> {
     while (queue.length) {
       if (deadlineAt - Date.now() < 10) {
         warnOnce("drain_deadline", `[download] drain deadline reached; ${queue.length} event(s) left for a later request.`);
@@ -516,7 +532,9 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
       const batchId = randomUUID();
       try {
         await persistEvents(events, { ...options, io, batchId, now, deadlineAt });
-        if (shouldPrune) void pruneExpired(io, now());
+        // Fire-and-forget: prune must not block the drain or fail the count.
+        // The wave signal aborts it at the same deadline; a miss is retried later.
+        if (shouldPrune) void pruneExpired(io, now(), signal);
       } catch (error) {
         const kind = error instanceof Error ? error.name || "write_failed" : "write_failed";
         warnOnce(
@@ -529,6 +547,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
 
   function kick(): Promise<void> {
     const end = waveDeadlineAt ?? Date.now() + writeBudget;
+    const signal = waveDeadlineAt == null ? beginWave(end) : (waveAbort?.signal ?? beginWave(end));
     waveDeadlineAt = end;
     if (end - Date.now() < 10) {
       return Promise.resolve();
@@ -536,7 +555,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
     if (draining) {
       return draining.then(() => (queue.length && end - Date.now() >= 10 ? kick() : undefined));
     }
-    draining = drain(end)
+    draining = drain(end, signal)
       .catch((error) => {
         warnOnce(
           "drain",
@@ -549,6 +568,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
     return draining.then(() => {
       if (queue.length && end - Date.now() >= 10) return kick();
       // Wave over: leftover events wait for a later request (fresh budget).
+      // Keep waveAbort/timer so an in-flight prune still dies at the deadline.
       waveDeadlineAt = null;
     });
   }

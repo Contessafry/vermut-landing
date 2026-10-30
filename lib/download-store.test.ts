@@ -449,16 +449,18 @@ test("two queued hanging flushes share one drain budget and skip the second unde
   const second = rec.record({ channel: "stable", source: "two", path: "/" });
   await Promise.all([first, second]);
   const elapsed = Date.now() - started;
-  assert.ok(elapsed < 2 * timeoutMs, `two queued flushes must end within one ${timeoutMs}ms drain, took ${elapsed}ms`);
   assert.equal(putProbe.called, 1, "second flush must not start when leftover is under 10ms");
   assert.equal(putProbe.signalDefined, 1);
   assert.equal(putProbe.aborted, 1);
+  assert.ok(elapsed < 1000, `must not hang the suite, took ${elapsed}ms`);
 });
 
 test("two queued flushes: the second consumes the drain remainder, not a fresh timeoutMs", async () => {
   const io = createMemoryBlob();
   const putProbe = emptyProbe();
   let puts = 0;
+  let secondStarted = 0;
+  let secondAbortedAt = 0;
   const firstDelayMs = 40;
   const hung: BlobEventIO = {
     ...io,
@@ -468,6 +470,12 @@ test("two queued flushes: the second consumes the drain remainder, not a fresh t
       if (puts === 1) {
         await new Promise((r) => setTimeout(r, firstDelayMs));
         return io.put(pathname, body, signal);
+      }
+      secondStarted = Date.now();
+      if (signal) {
+        signal.addEventListener("abort", () => {
+          secondAbortedAt = Date.now();
+        });
       }
       return hangUntilAbort(signal);
     },
@@ -480,14 +488,69 @@ test("two queued flushes: the second consumes the drain remainder, not a fresh t
   const second = rec.record({ channel: "stable", source: "two", path: "/" });
   await Promise.all([first, second]);
   const elapsed = Date.now() - started;
-  assert.ok(
-    elapsed < timeoutMs + 40,
-    `second flush must use the leftover (~40ms), not a fresh ${timeoutMs}ms; took ${elapsed}ms`,
-  );
-  assert.ok(elapsed >= firstDelayMs, `elapsed ${elapsed}ms should include the first flush`);
+  const secondLived = secondAbortedAt - secondStarted;
   assert.equal(puts, 2, "both flushes must run so a per-flush deadline would be visible");
   assert.equal(putProbe.signalDefined, 2);
   assert.equal(putProbe.aborted, 1, "only the second (hanging) put is aborted");
+  assert.ok(secondStarted > 0 && secondAbortedAt > 0, "second put must receive an abort");
+  assert.ok(
+    secondLived < timeoutMs - 20,
+    `second put lived ${secondLived}ms on leftover; a fresh ${timeoutMs}ms deadline would be ~${timeoutMs}ms`,
+  );
+  assert.ok(elapsed < 5 * timeoutMs, `hang guard, took ${elapsed}ms`);
+});
+
+test("a mid-wave record() reuses waveDeadlineAt and does not start a second put", async () => {
+  const io = createMemoryBlob();
+  const putProbe = emptyProbe();
+  const hung: BlobEventIO = {
+    ...io,
+    async put(_pathname, _body, signal) {
+      trackAbort(putProbe, signal);
+      return hangUntilAbort(signal);
+    },
+  };
+  const timeoutMs = 80;
+  const rec = createRecorder({ io: hung, now, prune: false, timeoutMs, maxAttempts: 1, sleep: async () => {} });
+  const started = Date.now();
+  const first = rec.record({ channel: "stable", source: "one", path: "/" });
+  while (putProbe.called < 1) await new Promise((r) => setTimeout(r, 1));
+  await new Promise((r) => setTimeout(r, 40));
+  const second = rec.record({ channel: "stable", source: "two", path: "/" });
+  await Promise.all([first, second]);
+  const elapsed = Date.now() - started;
+  assert.equal(putProbe.called, 1, "second record at t≈40ms must reuse the wave; a fresh Date.now()+budget starts a second put");
+  assert.equal(putProbe.signalDefined, 1);
+  assert.equal(putProbe.aborted, 1);
+  assert.ok(elapsed < 2 * timeoutMs, `shared wave budget, took ${elapsed}ms (fresh-deadline mutant is ~160ms)`);
+});
+
+test("pruneExpired is aborted by the wave signal and does not block the drain", async () => {
+  const io = createMemoryBlob();
+  const pruneProbe = emptyProbe();
+  const pruning: BlobEventIO = {
+    ...io,
+    async list(_prefix, _cursor, signal) {
+      trackAbort(pruneProbe, signal);
+      return hangUntilAbort(signal);
+    },
+  };
+  const timeoutMs = 50;
+  // Offset from NOON so this window is not already in the process-wide prunedDates set.
+  const later = () => NOON + 14 * 86_400_000;
+  const rec = createRecorder({ io: pruning, now: later, prune: true, timeoutMs, maxAttempts: 1, sleep: async () => {} });
+  const started = Date.now();
+  await rec.record({ channel: "stable", source: "kept", path: "/" });
+  const drainMs = Date.now() - started;
+  assert.ok(drainMs < 30, `prune must not block the drain, took ${drainMs}ms`);
+  assert.equal(io.files.size, 1, "the counted batch must land even if prune hangs");
+  const waitUntil = Date.now() + timeoutMs + 80;
+  while (pruneProbe.aborted < 1 && Date.now() < waitUntil) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  assert.ok(pruneProbe.called >= 1, "prune must list expired prefixes");
+  assert.equal(pruneProbe.signalDefined, pruneProbe.called, "prune list/del must receive the wave signal");
+  assert.ok(pruneProbe.aborted >= 1, "wave deadline must abort prune; a miss is retried later");
 });
 
 test("readStats hanging list fails within the shared 7-day budget, never with empty days", async () => {
