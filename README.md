@@ -75,10 +75,11 @@ One-time setup on Vercel:
 2. Redeploy so `BLOB_READ_WRITE_TOKEN` (and `BLOB_STORE_ID`) are present. Do not commit the token.
 3. Add `DOWNLOAD_STATS_SECRET` (a long random string) and redeploy if you want to read counts.
 
-Read today's and the last 7 days' totals:
+Read today's and the last 7 days' totals (header only — do not put the secret in the URL, it ends up in logs):
 
 ```bash
 curl -sS -H "Authorization: Bearer $DOWNLOAD_STATS_SECRET" https://<your-domain>/api/download-stats
+# or: -H "x-download-stats-key: $DOWNLOAD_STATS_SECRET"
 ```
 
 Deployments with Vercel Authentication need the protection-bypass header as well. If Blob is not configured, `/api/download` still redirects and counting is skipped.

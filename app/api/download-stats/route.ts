@@ -16,9 +16,7 @@ function providedSecret(request: Request): string | null {
     if (token) return token;
   }
   const alt = request.headers.get("x-download-stats-key")?.trim();
-  if (alt) return alt;
-  const key = new URL(request.url).searchParams.get("key")?.trim();
-  return key || null;
+  return alt || null;
 }
 
 /**

@@ -10,21 +10,30 @@ export const maxDuration = 30;
  * forwarded to GitHub. Counting is best-effort: Blob failures do not affect the
  * redirect.
  */
-export async function GET(request: Request) {
+async function redirectToGithub(request: Request) {
   await connection();
   const url = new URL(request.url);
   const channel = parseChannel(url.searchParams.get("channel"));
   const dest = await destinationFor(channel);
-
-  const event = {
-    channel,
-    source: sanitizeSource(url.searchParams.get("src")),
-    path: sanitizePath(url.searchParams.get("path")),
-  };
-
-  after(() => recordDownloadClick(event));
-
   const response = NextResponse.redirect(dest, 302);
   response.headers.set("Cache-Control", "private, no-store");
+  return { url, channel, response };
+}
+
+export async function GET(request: Request) {
+  const { url, channel, response } = await redirectToGithub(request);
+  after(() =>
+    recordDownloadClick({
+      channel,
+      source: sanitizeSource(url.searchParams.get("src")),
+      path: sanitizePath(url.searchParams.get("path")),
+    }),
+  );
+  return response;
+}
+
+/** Probes must not increment the counter. */
+export async function HEAD(request: Request) {
+  const { response } = await redirectToGithub(request);
   return response;
 }

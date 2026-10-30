@@ -42,7 +42,7 @@ const SOURCE = /^[a-z0-9._:/-]{1,80}$/;
 const PATH = /^\/[-a-zA-Z0-9/_]*$/;
 
 export function parseChannel(raw: string | null | undefined): DownloadChannel {
-  return raw === "releases" ? "releases" : "stable";
+  return raw?.trim().toLowerCase() === "releases" ? "releases" : "stable";
 }
 
 /** First-party counted href. `src` is added by the client from sessionStorage. */

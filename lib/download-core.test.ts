@@ -16,6 +16,8 @@ test("parseChannel defaults unknown values to stable (never a free-form URL)", (
   assert.equal(parseChannel(null), "stable");
   assert.equal(parseChannel("stable"), "stable");
   assert.equal(parseChannel("releases"), "releases");
+  assert.equal(parseChannel("Releases"), "releases");
+  assert.equal(parseChannel("RELEASES"), "releases");
   assert.equal(parseChannel("https://evil.example/"), "stable");
   assert.equal(parseChannel("beta"), "stable");
 });
