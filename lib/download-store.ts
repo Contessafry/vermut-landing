@@ -48,7 +48,14 @@ export type PersistOptions = {
   maxAttempts?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
-  /** Per-attempt abort budget. Default WRITE_BUDGET_MS. */
+  /** Shared deadline for the whole flush (all retries). Default WRITE_BUDGET_MS. */
+  timeoutMs?: number;
+};
+
+export type ReadOptions = {
+  io?: BlobEventIO;
+  now?: () => number;
+  /** Shared deadline for list + every get of one day. Default READ_BUDGET_MS. */
   timeoutMs?: number;
 };
 
@@ -62,8 +69,22 @@ export const LIST_PAGE = 1000;
 const KEY_CAP = 200;
 const LOOKBACK_DAYS = 7;
 const MAX_ATTEMPTS = 4;
-/** Counting runs in after(); this does not delay the 302. Leave headroom under maxDuration 30s. */
+/**
+ * Shared deadline for one flush: every retry consumes whatever time is left,
+ * the last attempt is aborted when this elapses. 20s total, not 20s per try,
+ * so 4 attempts cannot run to 80s. Route maxDuration is 30s; 10s of headroom
+ * is left so after() is not killed mid-write.
+ */
 export const WRITE_BUDGET_MS = 20_000;
+/** Shared deadline for one day's list + gets. Hung Blob → error, never an empty day. */
+export const READ_BUDGET_MS = 10_000;
+
+export class DeadlineError extends Error {
+  constructor(ms: number) {
+    super(`deadline exceeded after ${ms}ms`);
+    this.name = "DeadlineError";
+  }
+}
 
 type Access = "public" | "private";
 
@@ -247,13 +268,25 @@ async function withAccess<T>(fn: (a: Access) => Promise<T>): Promise<T> {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Abort `signal` at `ms` and reject even if `fn` ignores the abort.
+ * Callers that honor the signal (put/get/list) cancel in-flight work so
+ * nothing lands after we give up.
+ */
 export async function runWithDeadline<T>(ms: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), Math.max(1, ms));
+  const budget = Math.max(1, ms);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      ac.abort();
+      reject(new DeadlineError(budget));
+    }, budget);
+  });
   try {
-    return await fn(ac.signal);
+    return await Promise.race([fn(ac.signal), timeout]);
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -309,7 +342,7 @@ export type CountedDay =
   | { status: "invalid_date"; date: string }
   | { status: "error"; error: unknown };
 
-async function listAll(io: BlobEventIO, prefix: string, signal?: AbortSignal): Promise<string[]> {
+export async function listAll(io: BlobEventIO, prefix: string, signal?: AbortSignal): Promise<string[]> {
   const pathnames: string[] = [];
   let cursor: string | undefined;
   do {
@@ -325,10 +358,7 @@ async function listAll(io: BlobEventIO, prefix: string, signal?: AbortSignal): P
  * out-of-retention and invalid dates are distinct statuses, not empty days.
  * Future dates are valid empty days (no clicks can exist yet).
  */
-export async function readCountedDay(
-  date: string,
-  options: { io?: BlobEventIO; now?: () => number } = {},
-): Promise<CountedDay> {
+export async function readCountedDay(date: string, options: ReadOptions = {}): Promise<CountedDay> {
   const parsed = parseUtcDate(date);
   if (!parsed.ok) return { status: "invalid_date", date };
   const io = options.io ?? vercelIO;
@@ -339,36 +369,42 @@ export async function readCountedDay(
   if (isFutureDate(parsed.date, now())) {
     return { status: "ok", day: emptyDay(parsed.date, now()), batches: 0 };
   }
-  let pathnames: string[];
+  const budget = options.timeoutMs ?? READ_BUDGET_MS;
   try {
-    pathnames = await listAll(io, dayPrefix(parsed.date));
+    return await runWithDeadline(budget, async (signal) => {
+      const pathnames = await listAll(io, dayPrefix(parsed.date), signal);
+      if (signal.aborted) throw new DeadlineError(budget);
+      const batches: DayCounts[] = [];
+      for (const pathname of pathnames) {
+        if (signal.aborted) throw new DeadlineError(budget);
+        try {
+          const text = await io.get(pathname, signal);
+          if (text == null) continue;
+          const parsedBatch = parseDayCounts(text, parsed.date);
+          if (!parsedBatch.ok) {
+            warnOnce("batch_corrupt", `[download] skipping unreadable batch ${pathname}.`);
+            continue;
+          }
+          batches.push(parsedBatch.day);
+        } catch (error) {
+          if (signal.aborted || error instanceof DeadlineError) throw error;
+          warnOnce(
+            "batch_read",
+            `[download] skipping unread batch ${pathname}. ${error instanceof Error ? error.message : ""}`.trim(),
+          );
+        }
+      }
+      return { status: "ok" as const, day: mergeDays(parsed.date, batches, now()), batches: batches.length };
+    });
   } catch (error) {
     return { status: "error", error };
   }
-  const batches: DayCounts[] = [];
-  for (const pathname of pathnames) {
-    try {
-      const text = await io.get(pathname);
-      if (text == null) continue;
-      const parsedBatch = parseDayCounts(text, parsed.date);
-      if (!parsedBatch.ok) {
-        warnOnce("batch_corrupt", `[download] skipping unreadable batch ${pathname}.`);
-        continue;
-      }
-      batches.push(parsedBatch.day);
-    } catch (error) {
-      warnOnce(
-        "batch_read",
-        `[download] skipping unread batch ${pathname}. ${error instanceof Error ? error.message : ""}`.trim(),
-      );
-    }
-  }
-  return { status: "ok", day: mergeDays(parsed.date, batches, now()), batches: batches.length };
 }
 
 /**
  * Write one flush. Pathname is `batchId` (generated by the caller, once).
- * Retries reuse that pathname and the same body. A hung put is aborted via signal.
+ * Retries reuse that pathname and the same body. One shared deadline covers
+ * every attempt; a hung put is aborted when that deadline elapses.
  */
 export async function persistEvents(events: ClickEvent[], options: PersistOptions = {}): Promise<void> {
   if (!events.length) return;
@@ -376,25 +412,29 @@ export async function persistEvents(events: ClickEvent[], options: PersistOption
   const maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
-  const timeoutMs = options.timeoutMs ?? WRITE_BUDGET_MS;
+  const budgetMs = options.timeoutMs ?? WRITE_BUDGET_MS;
   const date = utcDate(now());
   const batchId = options.batchId ?? randomUUID();
   const pathname = batchPath(date, batchId);
   const body = JSON.stringify({ ...applyEvents(emptyDay(date, now()), events, now()), batchId });
+  const deadlineAt = Date.now() + budgetMs;
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const remaining = deadlineAt - Date.now();
+    if (remaining < 10) break;
     try {
-      await runWithDeadline(timeoutMs, (signal) => io.put(pathname, body, signal));
+      await runWithDeadline(remaining, (signal) => io.put(pathname, body, signal));
       return;
     } catch (error) {
       lastError = error;
-      if (attempt >= maxAttempts) break;
-      const backoff = Math.min(400, 25 * 2 ** (attempt - 1));
-      await sleep(backoff);
+      const left = deadlineAt - Date.now();
+      if (left < 10 || attempt >= maxAttempts) break;
+      const backoff = Math.min(400, 25 * 2 ** (attempt - 1), left);
+      if (backoff > 0) await sleep(backoff);
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  throw lastError instanceof Error ? lastError : new DeadlineError(budgetMs);
 }
 
 export async function pruneExpired(
@@ -489,7 +529,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
       return kick();
     },
     readDay(date) {
-      return readCountedDay(date, { io, now });
+      return readCountedDay(date, { io, now, timeoutMs: options.timeoutMs });
     },
     async readStats() {
       const today = utcDate(now());
@@ -499,7 +539,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
       }
       const days: DayCounts[] = [];
       for (const d of dates) {
-        const read = await readCountedDay(d, { io, now });
+        const read = await readCountedDay(d, { io, now, timeoutMs: options.timeoutMs });
         if (read.status === "error") {
           throw read.error instanceof Error ? read.error : new Error(String(read.error));
         }

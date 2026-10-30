@@ -23,8 +23,8 @@ async function redirectToGithub(request: Request) {
 export async function GET(request: Request) {
   const { url, channel, response } = await redirectToGithub(request);
   // after() runs once the 302 has been sent. Counting does not delay the
-  // download. A hung Blob put is aborted via AbortSignal and retried on the
-  // same batch pathname (idempotent overwrite).
+  // download. The flush has one 20s deadline (under maxDuration 30s); hung
+  // puts are aborted and retried on the same pathname until that deadline.
   after(() =>
     recordDownloadClick({
       channel,

@@ -67,7 +67,7 @@ See `.env.example`.
 
 ### Download click counts (Vercel Blob)
 
-Counted download buttons go through `/api/download?channel=stable|releases`, which 302s to the GitHub DMG or the releases page. The count runs in `after()` after the 302 is sent (it does not delay the download). Each isolate flush writes **one new object** at `download-counts/YYYY-MM-DD/<batchId>.json` — no shared file, no etag. The batch id is generated once so a retry overwrites the same object and cannot double-count. Objects older than 90 days are deleted (delete is free). First-touch `utm_source` / `utm_medium` / `utm_campaign` / `gclid` (presence only) live in `sessionStorage` on the client; the route only receives a short English source label.
+Counted download buttons go through `/api/download?channel=stable|releases`, which 302s to the GitHub DMG or the releases page. The count runs in `after()` after the 302 is sent (it does not delay the download). Each isolate flush writes **one new object** at `download-counts/YYYY-MM-DD/<batchId>.json` — no shared file, no etag. The batch id is generated once so a retry overwrites the same object and cannot double-count. A flush has one 20s deadline for all retries (under the route `maxDuration` of 30s); hung `put`/`get`/`list` are aborted via `AbortSignal`. Objects older than 90 days are deleted (delete is free). First-touch `utm_source` / `utm_medium` / `utm_campaign` / `gclid` (presence only) live in `sessionStorage` on the client; the route only receives a short English source label.
 
 One-time setup on Vercel:
 

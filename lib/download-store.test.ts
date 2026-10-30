@@ -13,6 +13,7 @@ import {
   mergeDays,
   parseDayCounts,
   parseUtcDate,
+  LIST_PAGE,
   persistEvents,
   pruneExpired,
   readCountedDay,
@@ -137,7 +138,7 @@ test("BlobUnknownError on one isolate write does not clobber other batches", asy
   }
 });
 
-test("timed-out put that later lands does not double-count (same batchId)", async () => {
+test("a transient put error plus a late overwrite of the same batchId does not double-count", async () => {
   const io = createMemoryBlob();
   let first = true;
   const racing: BlobEventIO = {
@@ -145,17 +146,8 @@ test("timed-out put that later lands does not double-count (same batchId)", asyn
     async put(pathname, body, signal) {
       if (first) {
         first = false;
-        await new Promise<void>((resolve, reject) => {
-          const land = setTimeout(() => {
-            io.files.set(pathname, body);
-            resolve();
-          }, 80);
-          signal?.addEventListener("abort", () => {
-            reject(Object.assign(new Error("The request was aborted."), { name: "AbortError" }));
-          });
-          void land;
-        });
-        return;
+        setTimeout(() => io.files.set(pathname, body), 30).unref();
+        throw new BlobUnknownError();
       }
       await io.put(pathname, body, signal);
     },
@@ -164,15 +156,55 @@ test("timed-out put that later lands does not double-count (same batchId)", asyn
     io: racing,
     now,
     batchId: "same-id",
-    timeoutMs: 30,
+    timeoutMs: 200,
     maxAttempts: 3,
     sleep: async () => {},
   });
+  await new Promise((r) => setTimeout(r, 50));
   assert.equal(io.files.size, 1);
   assert.equal(io.files.has(batchPath("2026-10-30", "same-id")), true);
   const read = await readCountedDay("2026-10-30", { io, now });
   assert.equal(read.status, "ok");
   if (read.status === "ok") assert.equal(read.day.total, 1);
+});
+
+function hangUntilAbort(signal: AbortSignal | undefined, onLand?: () => void): Promise<never> {
+  return new Promise((_, reject) => {
+    const land = onLand ? setTimeout(onLand, 5_000) : undefined;
+    const fail = () => {
+      if (land) clearTimeout(land);
+      reject(Object.assign(new Error("The request was aborted."), { name: "AbortError" }));
+    };
+    if (!signal) return;
+    if (signal.aborted) {
+      fail();
+      return;
+    }
+    signal.addEventListener("abort", fail);
+  });
+}
+
+test("a hanging put consumes the shared flush deadline and leaves no orphan write", async () => {
+  const io = createMemoryBlob();
+  let aborted = 0;
+  const hung: BlobEventIO = {
+    ...io,
+    async put(pathname, body, signal) {
+      signal?.addEventListener("abort", () => {
+        aborted += 1;
+      });
+      return hangUntilAbort(signal, () => io.files.set(pathname, body));
+    },
+  };
+  const started = Date.now();
+  await assert.rejects(() =>
+    persistEvents(click(1), { io: hung, now, timeoutMs: 80, maxAttempts: 4, sleep: async () => {} }),
+  );
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 400, `flush must end within the 80ms deadline, took ${elapsed}ms`);
+  assert.ok(aborted >= 1, "deadline must abort the in-flight put");
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(io.files.size, 0, "aborted put must not land later");
 });
 
 test("hung put is aborted via signal and does not wait on the in-flight call", async () => {
@@ -324,4 +356,87 @@ test("mergeDays adds batches and does not reset", () => {
   assert.equal(merged.total, 5);
   assert.equal(merged.sources.a, 2);
   assert.equal(merged.sources.b, 3);
+});
+
+test("hung list returns a read error within the deadline, not an empty day", async () => {
+  const io = createMemoryBlob();
+  io.files.set(batchPath("2026-10-30", "a"), JSON.stringify({ date: "2026-10-30", total: 4, channels: {}, sources: {}, paths: {} }));
+  const hung: BlobEventIO = {
+    ...io,
+    async list(_prefix, _cursor, signal) {
+      return hangUntilAbort(signal);
+    },
+  };
+  const started = Date.now();
+  const read = await readCountedDay("2026-10-30", { io: hung, now, timeoutMs: 50 });
+  assert.ok(Date.now() - started < 400, "list hang must not wait on the platform timeout");
+  assert.equal(read.status, "error");
+});
+
+test("hung get returns a read error within the deadline, not an empty day", async () => {
+  const io = createMemoryBlob();
+  io.files.set(batchPath("2026-10-30", "a"), JSON.stringify({ date: "2026-10-30", total: 4, channels: {}, sources: {}, paths: {} }));
+  const hung: BlobEventIO = {
+    ...io,
+    async get(_pathname, signal) {
+      return hangUntilAbort(signal);
+    },
+  };
+  const started = Date.now();
+  const read = await readCountedDay("2026-10-30", { io: hung, now, timeoutMs: 50 });
+  assert.ok(Date.now() - started < 400, "get hang must not wait on the platform timeout");
+  assert.equal(read.status, "error");
+});
+
+function createPagedBlob(files: Map<string, string>, pageSize = LIST_PAGE): BlobEventIO & { lists: number } {
+  const io: BlobEventIO & { lists: number } = {
+    lists: 0,
+    async put(pathname, body) {
+      files.set(pathname, body);
+    },
+    async get(pathname) {
+      return files.get(pathname) ?? null;
+    },
+    async list(prefix, cursor) {
+      io.lists += 1;
+      const all = [...files.keys()].filter((k) => k.startsWith(prefix)).sort();
+      const start = cursor ? Number(cursor) : 0;
+      const slice = all.slice(start, start + pageSize);
+      const next = start + pageSize < all.length ? String(start + pageSize) : undefined;
+      return { pathnames: slice, cursor: next };
+    },
+    async del(pathnames) {
+      for (const p of pathnames) files.delete(p);
+    },
+  };
+  return io;
+}
+
+test("listAll follows cursors: 2500 batches take 3 list pages and sum to 2500", async () => {
+  const files = new Map<string, string>();
+  for (let i = 0; i < 2500; i++) {
+    const id = `b${String(i).padStart(4, "0")}`;
+    files.set(
+      batchPath("2026-10-30", id),
+      JSON.stringify({ date: "2026-10-30", total: 1, channels: { stable: 1 }, sources: { direct: 1 }, paths: { "/": 1 } }),
+    );
+  }
+  const probe = createPagedBlob(files, LIST_PAGE);
+  const firstPage = await probe.list(dayPrefix("2026-10-30"));
+  assert.equal(firstPage.pathnames.length, LIST_PAGE);
+  assert.ok(firstPage.cursor, "more pages remain after the first");
+
+  const io = createPagedBlob(files, LIST_PAGE);
+  const read = await readCountedDay("2026-10-30", { io, now, timeoutMs: 5_000 });
+  assert.equal(read.status, "ok");
+  if (read.status === "ok") {
+    assert.equal(io.lists, 3, "1000 + 1000 + 500");
+    assert.equal(read.batches, 2500);
+    assert.equal(read.day.total, 2500);
+    assert.notEqual(
+      read.day.total,
+      firstPage.pathnames.length,
+      "first page alone is 1000; this assertion fails if listAll stops there",
+    );
+  }
 });
