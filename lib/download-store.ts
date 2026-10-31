@@ -344,20 +344,40 @@ export function blobPutOptions(signal?: AbortSignal) {
   };
 }
 
+/**
+ * Exact options object passed to `@vercel/blob` `put`. Tests spy on this
+ * call site — do not add a second `allowOverwrite` after spreading this.
+ */
+export function vercelPutLibraryOptions(
+  access: "public" | "private",
+  signal?: AbortSignal,
+  opts?: BlobPutOptions,
+) {
+  const write = blobPutOptions(signal);
+  return {
+    access,
+    addRandomSuffix: write.addRandomSuffix,
+    allowOverwrite: opts?.allowOverwrite ?? write.allowOverwrite,
+    contentType: write.contentType,
+    cacheControlMaxAge: write.cacheControlMaxAge,
+    abortSignal: write.abortSignal,
+  };
+}
+
+export type BlobLibraryPut = (
+  pathname: string,
+  body: string,
+  options: ReturnType<typeof vercelPutLibraryOptions>,
+) => Promise<unknown>;
+
 export async function vercelPut(
   pathname: string,
   body: string,
   signal?: AbortSignal,
   opts?: BlobPutOptions,
+  putImpl: BlobLibraryPut = put as BlobLibraryPut,
 ): Promise<void> {
-  const write = blobPutOptions(signal);
-  await withAccess((a) =>
-    put(pathname, body, {
-      access: a,
-      ...write,
-      allowOverwrite: opts?.allowOverwrite ?? write.allowOverwrite,
-    }),
-  );
+  await withAccess((a) => putImpl(pathname, body, vercelPutLibraryOptions(a, signal, opts)));
 }
 
 export async function vercelGet(pathname: string, signal?: AbortSignal): Promise<string | null> {
@@ -452,6 +472,7 @@ export async function readCountedDay(date: string, options: ReadOptions = {}): P
     if (signal.aborted) throw new DeadlineError(options.timeoutMs ?? READ_BUDGET_MS);
     const batches: DayCounts[] = [];
     for (const pathname of pathnames) {
+      if (pathname === legacyDayPath(parsed.date)) continue;
       if (signal.aborted) throw new DeadlineError(options.timeoutMs ?? READ_BUDGET_MS);
       try {
         const text = await io.get(pathname, signal);

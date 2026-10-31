@@ -8,6 +8,7 @@ import {
   batchPath,
   blobPutOptions,
   createRecorder,
+  PREFIX,
   dayPrefix,
   emptyDay,
   isFutureDate,
@@ -21,6 +22,8 @@ import {
   pruneExpired,
   readCountedDay,
   utcDate,
+  vercelPut,
+  vercelPutLibraryOptions,
   type BlobEventIO,
   type BlobPutOptions,
   type ClickEvent,
@@ -149,6 +152,21 @@ test("persistEvents puts with allowOverwrite true so a retry cannot double-count
   }
   assert.equal(blobPutOptions().allowOverwrite, true);
   assert.equal(io.files.has(batchPath("2026-10-30", "once")), true);
+});
+
+test("vercelPut passes allowOverwrite true to the Blob library put()", async () => {
+  const seen: Array<{ allowOverwrite?: boolean }> = [];
+  const spyPut = async (_pathname: string, _body: string, options: { allowOverwrite?: boolean }) => {
+    seen.push(options);
+  };
+  assert.equal(vercelPutLibraryOptions("private").allowOverwrite, true);
+  await vercelPut("download-counts/x.json", "{}", undefined, undefined, spyPut);
+  assert.equal(seen.length, 1, "vercelPut must call the library put once");
+  assert.equal(
+    seen[0]?.allowOverwrite,
+    true,
+    "library put must receive allowOverwrite: true; a false at the vercelPut call site fails this",
+  );
 });
 
 test("new day, no objects, 10 concurrent isolate flushes land on total=10 (10 trials)", async () => {
@@ -443,14 +461,61 @@ test("pruneExpired deletes leftover legacy download-counts/<date>.json", async (
   assert.equal(io.files.has(batchPath("2026-10-30", "fresh")), true);
 });
 
+test("readCountedDay ignores a legacy <date>.json even if list returns it", async () => {
+  const io = createMemoryBlob();
+  const date = "2026-10-30";
+  io.files.set(
+    legacyDayPath(date),
+    JSON.stringify({ date, total: 99, channels: { stable: 99 }, sources: { leftover: 99 }, paths: { "/": 99 } }),
+  );
+  io.files.set(
+    batchPath(date, "real"),
+    JSON.stringify({ date, total: 1, channels: { stable: 1 }, sources: { kept: 1 }, paths: { "/": 1 } }),
+  );
+  const leaky: BlobEventIO = {
+    ...io,
+    async list() {
+      return {
+        pathnames: [...io.files.keys()].filter((k) => k.startsWith(`${PREFIX}/${date}`)),
+      };
+    },
+  };
+  const leaked = await leaky.list(`${PREFIX}/${date}`);
+  assert.ok(leaked.pathnames.includes(legacyDayPath(date)), "list without a trailing slash sees the legacy object");
+  assert.ok(leaked.pathnames.includes(batchPath(date, "real")));
+  const read = await readCountedDay(date, { io: leaky, now });
+  assert.equal(read.status, "ok");
+  if (read.status === "ok") {
+    assert.equal(read.day.total, 1, "total must come only from the batch, not the leftover 99");
+    assert.equal(read.batches, 1);
+    assert.equal(read.day.sources.kept, 1);
+    assert.equal(read.day.sources.leftover, undefined);
+  }
+});
+
 test("createRecorder prunes at most once per isolate per UTC day", async () => {
   const io = createMemoryBlob();
-  const rec = createRecorder({ io, now, prune: true, sleep: async () => {}, timeoutMs: 200, maxAttempts: 1 });
+  let clock = NOON;
+  const rec = createRecorder({
+    io,
+    now: () => clock,
+    prune: true,
+    sleep: async () => {},
+    timeoutMs: 200,
+    maxAttempts: 1,
+  });
   await rec.record({ channel: "stable", source: "a", path: "/" });
   await rec.record({ channel: "stable", source: "b", path: "/" });
   await rec.record({ channel: "stable", source: "c", path: "/" });
   assert.equal(io.puts, 3);
   assert.equal(io.foldedLists, 1, "a prune-per-flush mutant lists the store once per put");
+  clock = NOON + 86_400_000;
+  await rec.record({ channel: "stable", source: "next-day", path: "/" });
+  assert.equal(
+    io.foldedLists,
+    2,
+    "a new UTC day must prune again; a once-in-the-lifetime flag stays at 1",
+  );
 });
 
 test("mergeDays adds batches and does not reset", () => {
