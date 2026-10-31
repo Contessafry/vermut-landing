@@ -1,0 +1,59 @@
+import { timingSafeEqual } from "node:crypto";
+import { connection, NextResponse } from "next/server";
+import { isBlobConfigured, readStats } from "@/lib/download-store";
+
+/** Covers one 10s shared read across all 7 days, with headroom. Not 7×10s. */
+export const maxDuration = 15;
+
+function secretsEqual(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+function providedSecret(request: Request): string | null {
+  const header = request.headers.get("authorization");
+  if (header && /^bearer\s+/i.test(header)) {
+    const token = header.replace(/^bearer\s+/i, "").trim();
+    if (token) return token;
+  }
+  const alt = request.headers.get("x-download-stats-key")?.trim();
+  return alt || null;
+}
+
+/**
+ * Today's counts and the last 7 UTC days, as JSON. Guarded by DOWNLOAD_STATS_SECRET.
+ * Unconfigured secret → 404 (the endpoint does not advertise itself).
+ * `?date=` is ignored — this endpoint does not accept a date query.
+ * Out-of-retention and invalid-date cases are not reachable here; they are
+ * handled by readCountedDay() for the later range-query PR.
+ * readStats() uses one 10s deadline for all 7 days; expiry is 503 blob_unavailable,
+ * never a day of zeros.
+ */
+export async function GET(request: Request) {
+  await connection();
+  const expected = process.env.DOWNLOAD_STATS_SECRET?.trim();
+  if (!expected) {
+    return new NextResponse(null, { status: 404 });
+  }
+  const provided = providedSecret(request);
+  if (!provided || !secretsEqual(provided, expected)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "private, no-store" } });
+  }
+  if (!isBlobConfigured()) {
+    return NextResponse.json(
+      { error: "blob_unconfigured" },
+      { status: 503, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+  try {
+    const stats = await readStats();
+    return NextResponse.json(stats, { headers: { "Cache-Control": "private, no-store" } });
+  } catch {
+    return NextResponse.json(
+      { error: "blob_unavailable" },
+      { status: 503, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+}

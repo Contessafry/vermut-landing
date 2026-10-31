@@ -1,10 +1,11 @@
 import { ArrowDownToLine } from "lucide-react";
+import { downloadHref } from "@/lib/download-core";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { localePath, type Locale } from "@/lib/i18n/config";
 import { guideHref, loadGuides } from "@/lib/guides";
 import { getRelease } from "@/lib/release";
 import { LanguageSwitcher } from "./language-switcher";
-import { site } from "@/site.config";
+import { links, site } from "@/site.config";
 
 /** `path` maps a locale to the same page in that locale (language list); default is each locale's home. */
 export async function SiteFooter({ path }: { path?: (l: Locale) => string } = {}) {
@@ -12,7 +13,13 @@ export async function SiteFooter({ path }: { path?: (l: Locale) => string } = {}
   const { ui, guides } = await loadGuides(locale);
   // Hash links point at home sections, so they work from guide pages too.
   const home = localePath(locale);
-  const resolve = (href: string) => (href.startsWith("#") ? `${home}${href}` : href);
+  const currentPath = path?.(locale) ?? home;
+  const resolve = (href: string) => {
+    if (href.startsWith("#")) return `${home}${href}`;
+    if (href === links.download) return downloadHref("stable", currentPath);
+    if (href === links.releases) return downloadHref("releases", currentPath);
+    return href;
+  };
   const columns = [
     ...content.footer.columns.map((c) => ({ ...c, links: c.links.map((l) => ({ ...l, href: resolve(l.href) })) })),
     { title: ui.guides, links: [{ label: ui.allGuides, href: guideHref(locale, "guides") }, ...guides.map((g) => ({ label: g.label, href: guideHref(locale, g.slug) }))] },
@@ -28,7 +35,7 @@ export async function SiteFooter({ path }: { path?: (l: Locale) => string } = {}
           <p className="mt-6 max-w-[38ch] text-body text-pretty">{f.statement}</p>
           <p className="mt-2 font-display text-[1.75rem] leading-none font-extrabold text-white">{site.tagline}</p>
           <a
-            href={f.cta.href}
+            href={downloadHref("stable", currentPath)}
             className="mt-8 inline-flex h-12 items-center gap-2.5 rounded-full bg-white px-6 font-semibold text-neutral-950 transition-colors hover:bg-neutral-200"
           >
             <ArrowDownToLine className="size-5" aria-hidden="true" />

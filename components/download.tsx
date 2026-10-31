@@ -1,5 +1,7 @@
 import { ArrowDownToLine, SquareTerminal } from "lucide-react";
-import { getDictionary } from "@/lib/i18n";
+import { downloadHref } from "@/lib/download-core";
+import { getDictionary, getLocale } from "@/lib/i18n";
+import { localePath } from "@/lib/i18n/config";
 import { getRelease } from "@/lib/release";
 import { links, release as cfg, site } from "@/site.config";
 import { CopyButton } from "./copy-button";
@@ -7,7 +9,8 @@ import { NotOpenedDialog, OpenAnywayPanel } from "./gatekeeper-illustrations";
 import { SectionHeading } from "./section-heading";
 
 export async function Download() {
-  const content = await getDictionary();
+  const [content, locale] = await Promise.all([getDictionary(), getLocale()]);
+  const path = localePath(locale);
   const s = content.download;
   const g = s.gatekeeper;
   const r = await getRelease();
@@ -26,7 +29,7 @@ export async function Download() {
 
         <div className="col-span-full lg:col-span-5">
           <a
-            href={r.dmgUrl}
+            href={downloadHref("stable", path)}
             className="inline-flex h-13 items-center gap-2.5 rounded-full bg-neutral-950 px-6 text-base font-semibold text-white transition-colors hover:bg-neutral-800"
           >
             <ArrowDownToLine className="size-5" aria-hidden="true" />
@@ -58,7 +61,7 @@ export async function Download() {
             ) : null}
           </dl>
           <p className="mt-6 text-[0.9375rem]">
-            <a href={cfg.releasesUrl} className="font-medium underline underline-offset-[3px] hover:text-muted-foreground">
+            <a href={downloadHref("releases", path)} className="font-medium underline underline-offset-[3px] hover:text-muted-foreground">
               {s.allReleases}
             </a>
           </p>

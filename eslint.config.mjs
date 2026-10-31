@@ -14,6 +14,13 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "video/**",
   ]),
+  {
+    files: ["**/*.test.ts"],
+    rules: {
+      // Node's type-stripping runner requires explicit .ts specifiers.
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -8,11 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "node -e \"const {spawnSync}=require('node:child_process'); const [maj,min]=process.versions.node.split('.').map(Number); const args=['--test','lib/download-core.test.ts','lib/download-store.test.ts']; if ((maj===22 && min<18) || (maj===23 && min<6) || maj<22) args.unshift('--experimental-strip-types'); if (maj===22 && min<10) args.unshift('--experimental-detect-module'); const r=spawnSync(process.execPath,args,{stdio:'inherit'}); process.exit(r.status==null?1:r.status)\"",
     "video:studio": "npm --prefix video run dev",
     "video:render": "npm --prefix video run render:all"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
+    "@vercel/blob": "^2.8.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.59.0",

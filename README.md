@@ -47,7 +47,7 @@ tag, and the SHA-256 parsed from the release notes. The values below are only th
 
 | Variable | What | Default today |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SITE_URL` | Production origin (canonical, OG, sitemap, robots, llms.txt) | Vercel production domain, else `https://vermut.example` |
+| `NEXT_PUBLIC_SITE_URL` | Production origin (canonical, OG, sitemap, robots, llms.txt) | `VERCEL_PROJECT_PRODUCTION_URL`, else `http://localhost:3000` (local only; production HTML uses `https://vermut.vercel.app`) |
 | `NEXT_PUBLIC_GITHUB_URL` | App source repo | `https://github.com/Contessafry/Vermut` |
 | `NEXT_PUBLIC_VERSION` | Fallback version | `1.1.2` |
 | `NEXT_PUBLIC_DMG_NAME` / `NEXT_PUBLIC_DOWNLOAD_URL` | Fallback DMG name / URL | `Vermut-1.1.2.dmg` / `releases/latest` |
@@ -58,8 +58,31 @@ tag, and the SHA-256 parsed from the release notes. The values below are only th
 | `NEXT_PUBLIC_DONATE_PAYPAL_URL` | PayPal donate link for the Support section (new tab); also JSON-LD DonateAction and llms.txt | `https://www.paypal.me/contessafry` |
 | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | Search Console token | empty |
 | `NEXT_PUBLIC_BING_SITE_VERIFICATION` | Bing Webmaster token (`msvalidate.01`) | empty |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob read/write token for download click counts (auto-set when a Blob store is connected) | empty (counting skipped; downloads still redirect) |
+| `BLOB_STORE_ID` | Blob store id (auto-set on Vercel when the store is connected; used with OIDC) | empty |
+| `BLOB_ACCESS` | `private` (default) or `public`, matching how the Blob store was created | `private` |
+| `DOWNLOAD_STATS_SECRET` | Shared secret for `GET /api/download-stats` | empty (endpoint 404s) |
 
 See `.env.example`.
+
+### Download click counts (Vercel Blob)
+
+Counted download buttons go through `/api/download?channel=stable|releases`, which 302s to the GitHub DMG or the releases page. The count runs in `after()` after the 302 is sent (it does not delay the download). Each isolate flush writes **one new object** at `download-counts/YYYY-MM-DD/<batchId>.json` — no shared file, no etag. The batch id is generated once so a retry overwrites the same object and cannot double-count. The whole `after()` drain shares one 20s deadline for every flush, retry, and prune (under the route `maxDuration` of 30s); leftover events under 10ms remaining wait for a later request. Prune runs at most once per isolate per UTC day: one folded `list` of `download-counts/` finds every day that exists (including traffic holes), then expired days and leftover `download-counts/<date>.json` objects are deleted (delete is free). A hung prune is aborted by the wave signal and retried the next UTC day; it never blocks the count. `/api/download-stats` uses one 10s deadline for all 7 days (route `maxDuration` 15s) and returns an error if it expires, never an empty day. Hung `put`/`get`/`list` are aborted via `AbortSignal`. First-touch `utm_source` / `utm_medium` / `utm_campaign` / `gclid` (presence only) live in `sessionStorage` on the client; the route only receives a short English source label.
+
+One-time setup on Vercel:
+
+1. Project → Storage → Create / connect a **Blob** store (Hobby 1 GB included). Production and Preview; add Development if you want local counts via `vercel env pull`.
+2. Redeploy so `BLOB_READ_WRITE_TOKEN` (and `BLOB_STORE_ID`) are present. Do not commit the token.
+3. Add `DOWNLOAD_STATS_SECRET` (a long random string) and redeploy if you want to read counts.
+
+Read today's and the last 7 days' totals (header only — do not put the secret in the URL, it ends up in logs):
+
+```bash
+curl -sS -H "Authorization: Bearer $DOWNLOAD_STATS_SECRET" https://<your-domain>/api/download-stats
+# or: -H "x-download-stats-key: $DOWNLOAD_STATS_SECRET"
+```
+
+Deployments with Vercel Authentication need the protection-bypass header as well. If Blob is not configured, `/api/download` still redirects and counting is skipped.
 
 Each release should attach one `.dmg` and put `SHA-256 (<name>.dmg): <hash>` in its notes.
 
