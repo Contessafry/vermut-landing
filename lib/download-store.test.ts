@@ -451,14 +451,17 @@ test("pruneExpired deletes a day outside the old 91-97 band (traffic hole)", asy
   assert.equal(io.files.has(batchPath(recent, "keep")), true);
 });
 
-test("pruneExpired deletes leftover legacy download-counts/<date>.json", async () => {
+test("pruneExpired deletes leftover legacy download-counts/<date>.json only when out of retention", async () => {
   const io = createMemoryBlob();
-  const leftover = "2026-10-01";
-  io.files.set(legacyDayPath(leftover), JSON.stringify({ date: leftover, total: 4, channels: {}, sources: {}, paths: {} }));
-  io.files.set(batchPath("2026-10-30", "fresh"), JSON.stringify({ date: "2026-10-30", total: 1, channels: {}, sources: {}, paths: {} }));
+  const today = "2026-10-30";
+  const ancient = utcDate(NOON - 120 * 86_400_000);
+  io.files.set(legacyDayPath(today), JSON.stringify({ date: today, total: 4, channels: {}, sources: {}, paths: {} }));
+  io.files.set(legacyDayPath(ancient), JSON.stringify({ date: ancient, total: 8, channels: {}, sources: {}, paths: {} }));
+  io.files.set(batchPath(today, "fresh"), JSON.stringify({ date: today, total: 1, channels: {}, sources: {}, paths: {} }));
   await pruneExpired(io, NOON);
-  assert.equal(io.files.has(legacyDayPath(leftover)), false, "folded pass must delete top-level legacy day JSON");
-  assert.equal(io.files.has(batchPath("2026-10-30", "fresh")), true);
+  assert.equal(io.files.has(legacyDayPath(today)), true, "in-window legacy must survive; a no-retention mutant deletes today");
+  assert.equal(io.files.has(legacyDayPath(ancient)), false, "legacy older than 90 days must be deleted");
+  assert.equal(io.files.has(batchPath(today, "fresh")), true);
 });
 
 test("readCountedDay ignores a legacy <date>.json even if list returns it", async () => {
@@ -672,7 +675,7 @@ test("a mid-wave record() reuses waveDeadlineAt and does not start a second put"
   assert.ok(elapsed < 2 * timeoutMs, `shared wave budget, took ${elapsed}ms (fresh-deadline mutant is ~160ms)`);
 });
 
-test("pruneExpired is aborted by the wave signal and does not block the drain", async () => {
+test("pruneExpired is aborted by its own budget and does not block the drain", async () => {
   const io = createMemoryBlob();
   const pruneProbe = emptyProbe();
   const pruning: BlobEventIO = {
@@ -682,22 +685,106 @@ test("pruneExpired is aborted by the wave signal and does not block the drain", 
       return hangUntilAbort(signal);
     },
   };
-  const timeoutMs = 50;
-  // Offset from NOON so this window is not already in the process-wide prunedDates set.
-  const later = () => NOON + 14 * 86_400_000;
-  const rec = createRecorder({ io: pruning, now: later, prune: true, timeoutMs, maxAttempts: 1, sleep: async () => {} });
+  const rec = createRecorder({
+    io: pruning,
+    now,
+    prune: true,
+    timeoutMs: 200,
+    pruneTimeoutMs: 50,
+    maxAttempts: 1,
+    sleep: async () => {},
+  });
   const started = Date.now();
   await rec.record({ channel: "stable", source: "kept", path: "/" });
   const drainMs = Date.now() - started;
   assert.ok(drainMs < 30, `prune must not block the drain, took ${drainMs}ms`);
   assert.equal(io.files.size, 1, "the counted batch must land even if prune hangs");
-  const waitUntil = Date.now() + timeoutMs + 80;
+  const waitUntil = Date.now() + 130;
   while (pruneProbe.aborted < 1 && Date.now() < waitUntil) {
     await new Promise((r) => setTimeout(r, 5));
   }
   assert.ok(pruneProbe.called >= 1, "prune must folded-list the store prefix");
-  assert.equal(pruneProbe.signalDefined, pruneProbe.called, "prune listFolded must receive the wave signal");
-  assert.ok(pruneProbe.aborted >= 1, "wave deadline must abort prune; a miss is retried later");
+  assert.equal(pruneProbe.signalDefined, pruneProbe.called, "prune must receive its own signal");
+  assert.ok(pruneProbe.aborted >= 1, "the prune budget must abort a hung pass; the wave signal must not");
+});
+
+test("a wave abort mid-prune does not stop the pass or mark the day pruned if it dies", async () => {
+  const io = createMemoryBlob();
+  const expired = Array.from({ length: 16 }, (_, i) => utcDate(NOON - (91 + i) * 86_400_000));
+  for (const d of expired) {
+    io.files.set(batchPath(d, "stale"), JSON.stringify({ date: d, total: 1, channels: {}, sources: {}, paths: {} }));
+  }
+  const delayed: BlobEventIO = {
+    ...io,
+    async list(prefix, cursor, signal) {
+      await new Promise((r) => setTimeout(r, 12));
+      if (signal?.aborted) {
+        throw Object.assign(new Error("The request was aborted."), { name: "AbortError" });
+      }
+      return io.list(prefix, cursor, signal);
+    },
+  };
+  const rec = createRecorder({
+    io: delayed,
+    now,
+    prune: true,
+    timeoutMs: 40,
+    pruneTimeoutMs: 2_000,
+    maxAttempts: 1,
+    sleep: async () => {},
+  });
+  await rec.record({ channel: "stable", source: "one", path: "/" });
+  await new Promise((r) => setTimeout(r, 450));
+  for (const d of expired) {
+    assert.equal(
+      io.files.has(batchPath(d, "stale")),
+      false,
+      `expired ${d} must go even after the write wave aborts; a wave-signal mutant leaves leftovers`,
+    );
+  }
+  await rec.record({ channel: "stable", source: "two", path: "/" });
+  assert.equal(io.foldedLists, 1, "a finished pass must set the day flag so a later flush does not list again");
+});
+
+test("an aborted prune leaves the day unpruned so the next click retries", async () => {
+  const io = createMemoryBlob();
+  const expired = Array.from({ length: 16 }, (_, i) => utcDate(NOON - (91 + i) * 86_400_000));
+  for (const d of expired) {
+    io.files.set(batchPath(d, "stale"), JSON.stringify({ date: d, total: 1, channels: {}, sources: {}, paths: {} }));
+  }
+  const delayed: BlobEventIO = {
+    ...io,
+    async list(prefix, cursor, signal) {
+      await new Promise((r) => setTimeout(r, 12));
+      if (signal?.aborted) {
+        throw Object.assign(new Error("The request was aborted."), { name: "AbortError" });
+      }
+      return io.list(prefix, cursor, signal);
+    },
+  };
+  const rec = createRecorder({
+    io: delayed,
+    now,
+    prune: true,
+    timeoutMs: 200,
+    pruneTimeoutMs: 40,
+    maxAttempts: 1,
+    sleep: async () => {},
+  });
+  await rec.record({ channel: "stable", source: "one", path: "/" });
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(io.foldedLists, 1);
+  assert.ok(
+    expired.some((d) => io.files.has(batchPath(d, "stale"))),
+    "a 40ms prune budget cannot finish 16 delayed days",
+  );
+  await rec.record({ channel: "stable", source: "two", path: "/" });
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(
+    io.foldedLists,
+    2,
+    "flag must stay unset when the pass dies; setting it before finish skips the retry",
+  );
 });
 
 test("readStats hanging list fails within the shared 7-day budget, never with empty days", async () => {

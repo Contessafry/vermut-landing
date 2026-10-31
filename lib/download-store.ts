@@ -80,6 +80,8 @@ export type RecorderOptions = PersistOptions & {
   prune?: boolean;
   /** Shared budget for the whole stats read (all 7 days). Default READ_BUDGET_MS. */
   readTimeoutMs?: number;
+  /** Own prune deadline. Default PRUNE_BUDGET_MS. Not the after() wave signal. */
+  pruneTimeoutMs?: number;
 };
 
 export const PREFIX = "download-counts";
@@ -89,12 +91,18 @@ const KEY_CAP = 200;
 export const LOOKBACK_DAYS = 7;
 const MAX_ATTEMPTS = 4;
 /**
- * Shared deadline for the whole after() drain — every flush, retry, and prune
+ * Shared deadline for the whole after() drain — every flush and retry
  * consume whatever time is left; under 10ms remaining no put is started.
  * 20s total, not 20s per attempt and not 20s per flush. Route maxDuration is
  * 30s; 10s of headroom is left so after() is not killed mid-write.
+ * Prune has its own budget (PRUNE_BUDGET_MS) and does not use this signal.
  */
 export const WRITE_BUDGET_MS = 20_000;
+/**
+ * Dedicated prune deadline. Inside after() / maxDuration 30s, not unlimited
+ * and not the write-wave signal — a later click must not abort a pass.
+ */
+export const PRUNE_BUDGET_MS = 8_000;
 /**
  * Shared deadline for one /api/download-stats call (all 7 days, one signal).
  * Not 10s per day. The stats route maxDuration is 15s.
@@ -559,40 +567,47 @@ export async function listAllFolded(
 
 /**
  * One discovery list (`mode: 'folded'` on `download-counts/`) then delete
- * every day older than RETENTION_DAYS and every leftover legacy
- * `download-counts/<date>.json`. Stops on the first list/delete error so
- * the next UTC day (or a later isolate) can retry. Delete is free.
+ * every day older than RETENTION_DAYS, including leftover legacy
+ * `download-counts/<date>.json` for those same expired days. In-window
+ * legacy (today and the last 90 days) is left in place. Stops on the first
+ * list/delete error so a later click can retry. Delete is free.
+ * Returns true only when the pass finished without abort or error.
  */
 export async function pruneExpired(
   io: BlobEventIO,
   now = Date.now(),
   signal?: AbortSignal,
-): Promise<void> {
-  if (signal?.aborted) return;
+): Promise<boolean> {
+  if (signal?.aborted) return false;
   try {
     const discovered = await listAllFolded(io, `${PREFIX}/`, signal);
-    if (signal?.aborted) return;
+    if (signal?.aborted) return false;
 
-    const legacy = discovered.blobs.filter((pathname) => dateFromLegacyBlob(pathname));
+    const legacy = discovered.blobs.filter((pathname) => {
+      const date = dateFromLegacyBlob(pathname);
+      return date != null && isOutOfRetention(date, now);
+    });
     if (legacy.length) {
       await io.del(legacy, signal);
-      if (signal?.aborted) return;
+      if (signal?.aborted) return false;
     }
 
     for (const folder of discovered.folders) {
-      if (signal?.aborted) return;
+      if (signal?.aborted) return false;
       const date = dateFromDayFolder(folder);
       if (!date || !isOutOfRetention(date, now)) continue;
       const pathnames = await listAll(io, dayPrefix(date), signal);
-      if (signal?.aborted) return;
+      if (signal?.aborted) return false;
       await io.del(pathnames, signal);
     }
+    return !signal?.aborted;
   } catch (error) {
-    if (signal?.aborted) return;
+    if (signal?.aborted) return false;
     warnOnce(
       "prune",
       `[download] prune failed. ${error instanceof Error ? error.message : ""}`.trim(),
     );
+    return false;
   }
 }
 
@@ -627,14 +642,34 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
   const shouldPrune = options.prune !== false;
   const writeBudget = options.timeoutMs ?? WRITE_BUDGET_MS;
   const readBudget = options.readTimeoutMs ?? READ_BUDGET_MS;
+  const pruneBudget = options.pruneTimeoutMs ?? PRUNE_BUDGET_MS;
   let queue: ClickEvent[] = [];
   let draining: Promise<void> | null = null;
   /** One wall-clock cut-off for every flush kicked while this isolate is draining. */
   let waveDeadlineAt: number | null = null;
   let waveAbort: AbortController | null = null;
   let waveAbortTimer: ReturnType<typeof setTimeout> | undefined;
-  /** UTC date of the prune pass that already started in this isolate. */
+  /** UTC date of a prune pass that finished in this isolate. Unset on abort/error. */
   let lastPruneUtcDay: string | null = null;
+  /** In-memory join for concurrent kickers in this isolate. Not a Blob lock. */
+  let pruneInFlight: Promise<void> | null = null;
+
+  function kickPrune(): void {
+    const today = utcDate(now());
+    if (lastPruneUtcDay === today) return;
+    if (pruneInFlight) return;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), Math.max(1, pruneBudget));
+    timer.unref?.();
+    pruneInFlight = pruneExpired(io, now(), ac.signal)
+      .then((finished) => {
+        if (finished) lastPruneUtcDay = today;
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        pruneInFlight = null;
+      });
+  }
 
   function beginWave(end: number): AbortSignal {
     if (waveAbortTimer) clearTimeout(waveAbortTimer);
@@ -646,7 +681,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
     return waveAbort.signal;
   }
 
-  async function drain(deadlineAt: number, signal: AbortSignal): Promise<void> {
+  async function drain(deadlineAt: number): Promise<void> {
     while (queue.length) {
       if (deadlineAt - Date.now() < 10) {
         warnOnce("drain_deadline", `[download] drain deadline reached; ${queue.length} event(s) left for a later request.`);
@@ -657,13 +692,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
       const batchId = randomUUID();
       try {
         await persistEvents(events, { ...options, io, batchId, now, deadlineAt });
-        // At most one prune pass per isolate per UTC day. Flag is set when
-        // the pass starts, not before persist. A failed pass retries tomorrow.
-        const today = utcDate(now());
-        if (shouldPrune && lastPruneUtcDay !== today) {
-          lastPruneUtcDay = today;
-          void pruneExpired(io, now(), signal);
-        }
+        if (shouldPrune) kickPrune();
       } catch (error) {
         const kind = error instanceof Error ? error.name || "write_failed" : "write_failed";
         warnOnce(
@@ -676,7 +705,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
 
   function kick(): Promise<void> {
     const end = waveDeadlineAt ?? Date.now() + writeBudget;
-    const signal = waveDeadlineAt == null ? beginWave(end) : (waveAbort?.signal ?? beginWave(end));
+    if (waveDeadlineAt == null || !waveAbort) beginWave(end);
     waveDeadlineAt = end;
     if (end - Date.now() < 10) {
       return Promise.resolve();
@@ -684,7 +713,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
     if (draining) {
       return draining.then(() => (queue.length && end - Date.now() >= 10 ? kick() : undefined));
     }
-    draining = drain(end, signal)
+    draining = drain(end)
       .catch((error) => {
         warnOnce(
           "drain",
@@ -697,7 +726,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
     return draining.then(() => {
       if (queue.length && end - Date.now() >= 10) return kick();
       // Wave over: leftover events wait for a later request (fresh budget).
-      // Keep waveAbort/timer so an in-flight prune still dies at the deadline.
+      // Prune has its own controller — it does not die with this wave.
       waveDeadlineAt = null;
     });
   }
