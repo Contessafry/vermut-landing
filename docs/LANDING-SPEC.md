@@ -2,7 +2,7 @@
 
 Status: **shipped as code** in `vermut-landing/` (Next.js 16.4, React 19.3, Tailwind 4, shadcn/ui).
 This document describes what is built and the rules for changing it. The source of truth for copy is
-`lib/content.ts`. The source of truth for unknown values is `site.config.ts`.
+`lib/i18n/dictionaries/` (English in `en.ts`; other locales merge via `lib/i18n/build.ts`). `lib/content.ts` re-exports English for llms.txt. The source of truth for unknown values is `site.config.ts`.
 Last updated 19 October 2026.
 
 > **Videos re-recorded 19 Oct 2026** from 2x Retina screenshots of the revised app (build ec56b94); see video/README.md to re-record again.
@@ -27,7 +27,7 @@ The page uses no aperitivo imagery.
 
 ## 3. Page structure and copy
 
-Order is fixed (approved by Francesco). The exact strings are in `lib/content.ts`, summarised here.
+Order is fixed (approved by Francesco). The exact strings are in `lib/i18n/dictionaries/` (English in `en.ts`), summarised here.
 
 | # | Section (anchor) | Layout | Key copy |
 |---|---|---|---|
@@ -226,7 +226,7 @@ These are the only values we don't know. All of them are in `site.config.ts` and
 - [ ] Placeholders filled (`rg PLACEHOLDER`). Production HTML uses the real origin; local unset builds emit `http://localhost:3000`, never `vermut.example`.
 - [ ] Videos and hero screenshot re-captured from the **revised** app: no Fortnite copy, no "grapple-wine", no CaskLauncher path.
 - [ ] Version, min macOS and requirements match `Package.swift`, Info.plist and README.
-- [ ] Competitor cells re-verified against sources [1]–[10]; "checked" date updated in `content.ts`.
+- [ ] Competitor cells re-verified against sources [1]–[10]; "checked" date updated in `lib/i18n/dictionaries/en.ts`.
 - [ ] Compatibility examples still correct (check areweanticheatyet.com).
 - [ ] `npm run lint && npm run typecheck && npm run build` are clean, and every route is static.
 - [ ] Lighthouse mobile ≥ 90 performance and 100 for a11y, best practices and SEO; desktop 100.

@@ -8,7 +8,7 @@ Steam and GOG Galaxy, adds Epic Games (beta, via Legendary) and sets up Wine for
   component is `components/step-video.tsx`, which handles play-on-visible, pause and reduced motion.
 - Tailwind CSS v4 with shadcn/ui (Button, Badge, Table), using Vermut tokens v2 verbatim in `app/globals.css`.
 - next/font (local, subset WOFF2): Bricolage Grotesque display, Hanken Grotesk text, JetBrains Mono.
-- All copy is typed data in `lib/content.ts`. Unknown values live only in `site.config.ts`.
+- Landing copy is typed data in `lib/i18n/dictionaries/<locale>.ts` (seven locales); guides live in `lib/guide-content/`. `lib/content.ts` re-exports English for llms.txt. Unknown values live only in `site.config.ts`.
 - Spec and documentation: `docs/LANDING-SPEC.md`.
 - Videos: Remotion project in `video/` (see `video/README.md`). It is not part of the web build.
 
@@ -105,7 +105,7 @@ Any static-capable Node host works too: run `npm run build && npm start`.
 app/            layout (fonts, metadata, JSON-LD), page, sitemap, robots, manifest, icons, OG image
 components/     hero, site-header, how-it-works, step-video (client), compatibility,
                 comparison, faq, site-footer, section-heading, rich-text, icons, ui/ (shadcn)
-lib/content.ts  all copy, typed
+lib/i18n/       landing copy per locale; lib/content.ts re-exports English for llms.txt
 site.config.ts  placeholders and known facts (min macOS 14.0 from Package.swift / Info.plist)
 assets/screens/ hero screenshot (real app, optimised by next/image to AVIF/WebP)
 public/videos/  step-{1,2,3}.{mp4,webm} and posters
