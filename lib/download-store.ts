@@ -5,19 +5,26 @@
  *   download-counts/YYYY-MM-DD/<batchId>.json
  * The batch id is generated once (not per retry). The same pathname can be
  * overwritten with the same body, so a retry after an ambiguous timeout does
- * not double-count. There is no shared object, no etag, no ifMatch.
+ * not double-count. Click writes do not use a shared object, etag, or ifMatch.
  *
- * /api/download-stats lists each day prefix (paginated) and sums the batches.
+ * /api/download-stats loads one optional snapshot at `download-counts/snapshot.json`
+ * (daily DayCounts + incorporated batch ids), lists the 7-day window, and gets
+ * only batches not yet in that set. New-batch gets share one per-request
+ * concurrency cap (not cap × days). The snapshot is a read acceleration: source
+ * batches stay until retention prune. Snapshot put is conditional (create:
+ * allowOverwrite false; update: ifMatch of the body just read). Conflict retry
+ * re-reads the snapshot and merges by batch id — not a multi-key transaction.
+ *
  * At most one prune pass per isolate per UTC day: one folded list of
  * `download-counts/` finds every day that exists (holes included), then
  * expired day prefixes are listed and deleted (delete is free). Legacy
  * `download-counts/<date>.json` objects are deleted in the same pass.
- * No daily rollup — a rollup would be a shared write.
+ * The snapshot pathname is not a dated blob and is not pruned.
  *
  * If Blob is not configured, recordDownloadClick() skips counting. The download
  * redirect must not depend on this module succeeding.
  */
-import { BlobAccessError, del, get, list, put } from "@vercel/blob";
+import { BlobAccessError, BlobPreconditionFailedError, del, get, list, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
 import type { DownloadChannel } from "./download-core";
 
@@ -38,7 +45,9 @@ export type DayCounts = {
 
 export type BatchRecord = DayCounts & { batchId: string };
 
-export type BlobPutOptions = { allowOverwrite: boolean };
+export type BlobPutOptions = { allowOverwrite?: boolean; ifMatch?: string };
+
+export type BlobGetResult = { body: string; etag: string };
 
 export type FoldedPage = {
   folders: string[];
@@ -48,11 +57,18 @@ export type FoldedPage = {
 
 export type BlobEventIO = {
   put: (pathname: string, body: string, signal?: AbortSignal, opts?: BlobPutOptions) => Promise<void>;
-  get: (pathname: string, signal?: AbortSignal) => Promise<string | null>;
+  get: (pathname: string, signal?: AbortSignal) => Promise<BlobGetResult | null>;
   list: (prefix: string, cursor?: string, signal?: AbortSignal) => Promise<{ pathnames: string[]; cursor?: string }>;
   /** Folded listing (`mode: 'folded'`). Folders are day prefixes; blobs are top-level objects. */
   listFolded: (prefix: string, cursor?: string, signal?: AbortSignal) => Promise<FoldedPage>;
   del: (pathnames: string[], signal?: AbortSignal) => Promise<void>;
+};
+
+export type SnapshotFile = {
+  v: 1;
+  updatedAt: string;
+  days: Record<string, DayCounts>;
+  incorporated: Record<string, string[]>;
 };
 
 export type PersistOptions = {
@@ -85,11 +101,16 @@ export type RecorderOptions = PersistOptions & {
 };
 
 export const PREFIX = "download-counts";
+export const SNAPSHOT_PATH = `${PREFIX}/snapshot.json`;
+export const SNAPSHOT_VERSION = 1;
 export const RETENTION_DAYS = 90;
 export const LIST_PAGE = 1000;
 const KEY_CAP = 200;
 export const LOOKBACK_DAYS = 7;
 const MAX_ATTEMPTS = 4;
+export const SNAPSHOT_MAX_ATTEMPTS = 4;
+/** Per-request cap for stats/day batch gets (and the 7-day lists). Not cap × days. */
+export const READ_CONCURRENCY = 8;
 /**
  * Shared deadline for the whole after() drain — every flush and retry
  * consume whatever time is left; under 10ms remaining no put is started.
@@ -145,6 +166,46 @@ export function batchPath(date: string, batchId: string): string {
 
 export function dayPrefix(date: string): string {
   return `${PREFIX}/${date}/`;
+}
+
+export function batchIdFromPathname(pathname: string, date: string): string | null {
+  const prefix = dayPrefix(date);
+  if (!pathname.startsWith(prefix) || !pathname.endsWith(".json")) return null;
+  const id = pathname.slice(prefix.length, -".json".length);
+  if (!id || id.includes("/") || id.includes("\\")) return null;
+  return id;
+}
+
+export function isSnapshotWriteConflict(error: unknown): boolean {
+  if (error instanceof BlobPreconditionFailedError) return true;
+  if (error instanceof Error && /already exists|cannot be overwritten/i.test(error.message)) return true;
+  return false;
+}
+
+/**
+ * Bound in-flight work across one stats/day read. Empty input returns [].
+ * Abort throws DeadlineError — same as list/get wrappers.
+ */
+export async function mapLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+  signal?: AbortSignal,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  if (items.length === 0) return results;
+  const cap = Math.max(1, Math.min(limit, items.length));
+  let next = 0;
+  const run = async () => {
+    for (;;) {
+      if (signal?.aborted) throw new DeadlineError(READ_BUDGET_MS);
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: cap }, () => run()));
+  return results;
 }
 
 /** Old RMW path. Not written anymore; prune deletes any leftover. */
@@ -298,6 +359,232 @@ export function parseDayCounts(text: string, date: string): ParseDayResult {
   }
 }
 
+export function parseSnapshot(text: string): SnapshotFile | null {
+  try {
+    const raw = JSON.parse(text) as unknown;
+    if (!raw || typeof raw !== "object") return null;
+    const rec = raw as Record<string, unknown>;
+    if (rec.v !== SNAPSHOT_VERSION) return null;
+    if (typeof rec.updatedAt !== "string") return null;
+    if (!rec.days || typeof rec.days !== "object" || Array.isArray(rec.days)) return null;
+    if (!rec.incorporated || typeof rec.incorporated !== "object" || Array.isArray(rec.incorporated)) return null;
+    const days: Record<string, DayCounts> = {};
+    for (const [date, value] of Object.entries(rec.days as Record<string, unknown>)) {
+      const parsedDate = parseUtcDate(date);
+      if (!parsedDate.ok) return null;
+      const parsed = parseDayCounts(JSON.stringify(value), parsedDate.date);
+      if (!parsed.ok) return null;
+      days[parsedDate.date] = parsed.day;
+    }
+    const incorporated: Record<string, string[]> = {};
+    for (const [date, ids] of Object.entries(rec.incorporated as Record<string, unknown>)) {
+      const parsedDate = parseUtcDate(date);
+      if (!parsedDate.ok) return null;
+      if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || id.length === 0)) return null;
+      incorporated[parsedDate.date] = [...new Set(ids as string[])];
+      if (!days[parsedDate.date]) return null;
+    }
+    for (const date of Object.keys(days)) {
+      if (!incorporated[date]) incorporated[date] = [];
+    }
+    return { v: SNAPSHOT_VERSION, updatedAt: rec.updatedAt, days, incorporated };
+  } catch {
+    return null;
+  }
+}
+
+type LoadedSnapshot =
+  | { kind: "missing" }
+  | { kind: "ok"; file: SnapshotFile; etag: string }
+  | { kind: "corrupt"; etag: string };
+
+async function loadSnapshot(io: BlobEventIO, signal?: AbortSignal): Promise<LoadedSnapshot> {
+  const got = await io.get(SNAPSHOT_PATH, signal);
+  if (got == null) return { kind: "missing" };
+  const file = parseSnapshot(got.body);
+  if (!file) {
+    warnOnce("snapshot_corrupt", "[download] ignoring unreadable stats snapshot; folding from batch objects.");
+    return { kind: "corrupt", etag: got.etag };
+  }
+  return { kind: "ok", file, etag: got.etag };
+}
+
+function lookbackDates(now: () => number): string[] {
+  const dates: string[] = [];
+  for (let i = LOOKBACK_DAYS - 1; i >= 0; i--) {
+    dates.push(utcDate(now() - i * 86_400_000));
+  }
+  return dates;
+}
+
+function statsPayload(dates: string[], daysByDate: Record<string, DayCounts>, now: () => number): StatsPayload {
+  const today = utcDate(now());
+  const days = dates.map((d) => daysByDate[d] ?? emptyDay(d, now()));
+  const channels: Record<string, number> = {};
+  const sources: Record<string, number> = {};
+  const paths: Record<string, number> = {};
+  let total = 0;
+  for (const d of days) {
+    total += d.total;
+    addMaps(channels, d.channels);
+    addMaps(sources, d.sources);
+    addMaps(paths, d.paths);
+  }
+  return {
+    retentionDays: RETENTION_DAYS,
+    today: days[days.length - 1] ?? emptyDay(today, now()),
+    last7Days: {
+      from: dates[0] ?? today,
+      to: today,
+      total,
+      channels,
+      sources,
+      paths,
+      days,
+    },
+  };
+}
+
+function incorporatedChanged(
+  snap: LoadedSnapshot,
+  dates: string[],
+  nextInc: Record<string, string[]>,
+): boolean {
+  if (snap.kind !== "ok") return true;
+  if (Object.keys(snap.file.days).some((d) => !dates.includes(d))) return true;
+  for (const date of dates) {
+    if (!snap.file.days[date]) return true;
+    const prev = new Set(snap.file.incorporated[date] ?? []);
+    const next = nextInc[date] ?? [];
+    if (prev.size !== next.length) return true;
+    for (const id of next) {
+      if (!prev.has(id)) return true;
+    }
+  }
+  return false;
+}
+
+async function getParsedBatch(
+  io: BlobEventIO,
+  pathname: string,
+  date: string,
+  signal: AbortSignal,
+): Promise<DayCounts | null> {
+  try {
+    const got = await io.get(pathname, signal);
+    if (got == null) return null;
+    const parsedBatch = parseDayCounts(got.body, date);
+    if (!parsedBatch.ok) {
+      warnOnce("batch_corrupt", `[download] skipping unreadable batch ${pathname}.`);
+      return null;
+    }
+    return parsedBatch.day;
+  } catch (error) {
+    if (signal.aborted || error instanceof DeadlineError) throw error;
+    warnOnce(
+      "batch_read",
+      `[download] skipping unread batch ${pathname}. ${error instanceof Error ? error.message : ""}`.trim(),
+    );
+    return null;
+  }
+}
+
+/**
+ * 7-day stats fold. Snapshot is acceleration only; source batches stay.
+ * Conflict on snapshot put re-reads and merges by batch id (not a transaction).
+ */
+export async function foldLookbackStats(
+  io: BlobEventIO,
+  now: () => number,
+  signal: AbortSignal,
+  concurrency = READ_CONCURRENCY,
+): Promise<StatsPayload> {
+  const dates = lookbackDates(now);
+  const fetched = new Map<string, DayCounts>();
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= SNAPSHOT_MAX_ATTEMPTS; attempt++) {
+    if (signal.aborted) throw new DeadlineError(READ_BUDGET_MS);
+    try {
+      const snap = await loadSnapshot(io, signal);
+      const baseDays = snap.kind === "ok" ? snap.file.days : {};
+      const incorporated: Record<string, Set<string>> = {};
+      if (snap.kind === "ok") {
+        for (const [date, ids] of Object.entries(snap.file.incorporated)) {
+          incorporated[date] = new Set(ids);
+        }
+      }
+
+      const listings = await mapLimit(dates, concurrency, (date) => listAll(io, dayPrefix(date), signal), signal);
+      const jobs: { date: string; pathname: string; batchId: string }[] = [];
+      const listedIds: Record<string, Set<string>> = {};
+      dates.forEach((date, i) => {
+        listedIds[date] = new Set();
+        for (const pathname of listings[i] ?? []) {
+          if (pathname === legacyDayPath(date)) continue;
+          const batchId = batchIdFromPathname(pathname, date);
+          if (!batchId) continue;
+          listedIds[date].add(batchId);
+          const key = `${date}/${batchId}`;
+          if (incorporated[date]?.has(batchId) || fetched.has(key)) continue;
+          jobs.push({ date, pathname, batchId });
+        }
+      });
+
+      await mapLimit(
+        jobs,
+        concurrency,
+        async (job) => {
+          const day = await getParsedBatch(io, job.pathname, job.date, signal);
+          if (day) fetched.set(`${job.date}/${job.batchId}`, day);
+        },
+        signal,
+      );
+
+      const nextDays: Record<string, DayCounts> = {};
+      const nextInc: Record<string, string[]> = {};
+      for (const date of dates) {
+        const already = incorporated[date] ?? new Set<string>();
+        const additions: DayCounts[] = [];
+        const inc = new Set<string>(already);
+        for (const id of listedIds[date] ?? []) {
+          if (already.has(id)) continue;
+          const extra = fetched.get(`${date}/${id}`);
+          if (!extra) continue;
+          additions.push(extra);
+          inc.add(id);
+        }
+        const base = baseDays[date] ?? emptyDay(date, now());
+        nextDays[date] = mergeDays(date, [base, ...additions], now());
+        nextInc[date] = [...inc].sort();
+      }
+
+      if (incorporatedChanged(snap, dates, nextInc)) {
+        if (snap.kind !== "missing" && !snap.etag) {
+          throw new Error("snapshot etag missing; refusing an unprotected overwrite");
+        }
+        const file: SnapshotFile = {
+          v: SNAPSHOT_VERSION,
+          updatedAt: new Date(now()).toISOString(),
+          days: nextDays,
+          incorporated: nextInc,
+        };
+        const opts: BlobPutOptions =
+          snap.kind === "missing" ? { allowOverwrite: false } : { allowOverwrite: true, ifMatch: snap.etag };
+        await io.put(SNAPSHOT_PATH, JSON.stringify(file), signal, opts);
+      }
+
+      return statsPayload(dates, nextDays, now);
+    } catch (error) {
+      lastError = error;
+      if (signal.aborted || error instanceof DeadlineError) throw error;
+      if (!isSnapshotWriteConflict(error) || attempt >= SNAPSHOT_MAX_ATTEMPTS) throw error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new DeadlineError(READ_BUDGET_MS);
+}
+
 function isAccessMismatch(error: unknown): boolean {
   if (error instanceof BlobAccessError) return true;
   const msg = error instanceof Error ? error.message : String(error);
@@ -362,7 +649,15 @@ export function vercelPutLibraryOptions(
   opts?: BlobPutOptions,
 ) {
   const write = blobPutOptions(signal);
-  return {
+  const options: {
+    access: "public" | "private";
+    addRandomSuffix: false;
+    allowOverwrite: boolean;
+    contentType: string;
+    cacheControlMaxAge: number;
+    abortSignal: AbortSignal | undefined;
+    ifMatch?: string;
+  } = {
     access,
     addRandomSuffix: write.addRandomSuffix,
     allowOverwrite: opts?.allowOverwrite ?? write.allowOverwrite,
@@ -370,6 +665,8 @@ export function vercelPutLibraryOptions(
     cacheControlMaxAge: write.cacheControlMaxAge,
     abortSignal: write.abortSignal,
   };
+  if (opts?.ifMatch) options.ifMatch = opts.ifMatch;
+  return options;
 }
 
 export type BlobLibraryPut = (
@@ -388,13 +685,14 @@ export async function vercelPut(
   await withAccess((a) => putImpl(pathname, body, vercelPutLibraryOptions(a, signal, opts)));
 }
 
-export async function vercelGet(pathname: string, signal?: AbortSignal): Promise<string | null> {
+export async function vercelGet(pathname: string, signal?: AbortSignal): Promise<BlobGetResult | null> {
   const result = await withAccess((a) => get(pathname, { access: a, useCache: false, abortSignal: signal }));
   if (result === null) return null;
   if (result.statusCode !== 200 || !result.stream) {
     throw new Error(`blob get status ${result.statusCode}`);
   }
-  return await new Response(result.stream).text();
+  const body = await new Response(result.stream).text();
+  return { body, etag: result.blob.etag };
 }
 
 export async function vercelList(
@@ -478,27 +776,16 @@ export async function readCountedDay(date: string, options: ReadOptions = {}): P
     if (signal.aborted) throw new DeadlineError(options.timeoutMs ?? READ_BUDGET_MS);
     const pathnames = await listAll(io, dayPrefix(parsed.date), signal);
     if (signal.aborted) throw new DeadlineError(options.timeoutMs ?? READ_BUDGET_MS);
-    const batches: DayCounts[] = [];
-    for (const pathname of pathnames) {
-      if (pathname === legacyDayPath(parsed.date)) continue;
-      if (signal.aborted) throw new DeadlineError(options.timeoutMs ?? READ_BUDGET_MS);
-      try {
-        const text = await io.get(pathname, signal);
-        if (text == null) continue;
-        const parsedBatch = parseDayCounts(text, parsed.date);
-        if (!parsedBatch.ok) {
-          warnOnce("batch_corrupt", `[download] skipping unreadable batch ${pathname}.`);
-          continue;
-        }
-        batches.push(parsedBatch.day);
-      } catch (error) {
-        if (signal.aborted || error instanceof DeadlineError) throw error;
-        warnOnce(
-          "batch_read",
-          `[download] skipping unread batch ${pathname}. ${error instanceof Error ? error.message : ""}`.trim(),
-        );
-      }
-    }
+    const jobs = pathnames.filter(
+      (pathname) => pathname !== legacyDayPath(parsed.date) && batchIdFromPathname(pathname, parsed.date),
+    );
+    const loaded = await mapLimit(
+      jobs,
+      READ_CONCURRENCY,
+      (pathname) => getParsedBatch(io, pathname, parsed.date, signal),
+      signal,
+    );
+    const batches = loaded.filter((day): day is DayCounts => day != null);
     return { status: "ok", day: mergeDays(parsed.date, batches, now()), batches: batches.length };
   };
 
@@ -740,47 +1027,7 @@ export function createRecorder(options: RecorderOptions): ClickRecorder {
       return readCountedDay(date, { io, now, timeoutMs: readBudget });
     },
     async readStats() {
-      const today = utcDate(now());
-      const dates: string[] = [];
-      for (let i = LOOKBACK_DAYS - 1; i >= 0; i--) {
-        dates.push(utcDate(now() - i * 86_400_000));
-      }
-      return runWithDeadline(readBudget, async (signal) => {
-        const reads = await Promise.all(dates.map((d) => readCountedDay(d, { io, now, signal })));
-        const days: DayCounts[] = [];
-        for (const read of reads) {
-          if (read.status === "error") {
-            throw read.error instanceof Error ? read.error : new Error(String(read.error));
-          }
-          if (read.status !== "ok") {
-            throw new Error(`stats window hit ${read.status}`);
-          }
-          days.push(read.day);
-        }
-        const channels: Record<string, number> = {};
-        const sources: Record<string, number> = {};
-        const paths: Record<string, number> = {};
-        let total = 0;
-        for (const d of days) {
-          total += d.total;
-          addMaps(channels, d.channels);
-          addMaps(sources, d.sources);
-          addMaps(paths, d.paths);
-        }
-        return {
-          retentionDays: RETENTION_DAYS,
-          today: days[days.length - 1] ?? emptyDay(today, now()),
-          last7Days: {
-            from: dates[0] ?? today,
-            to: today,
-            total,
-            channels,
-            sources,
-            paths,
-            days,
-          },
-        };
-      });
+      return runWithDeadline(readBudget, (signal) => foldLookbackStats(io, now, signal, READ_CONCURRENCY));
     },
   };
 }
