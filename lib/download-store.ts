@@ -640,6 +640,21 @@ export function blobPutOptions(signal?: AbortSignal) {
 }
 
 /**
+ * Exact options object passed to `@vercel/blob` `get`. Tests spy on this
+ * call site. `useCache: false` reads origin. `Accept-Encoding: identity`
+ * keeps the object ETag strong: CDN gzip returns `W/"…"` and Blob `ifMatch`
+ * uses strong comparison, so a weak validator 412s every snapshot update.
+ */
+export function vercelGetLibraryOptions(access: "public" | "private", signal?: AbortSignal) {
+  return {
+    access,
+    useCache: false as const,
+    abortSignal: signal,
+    headers: { "Accept-Encoding": "identity" as const },
+  };
+}
+
+/**
  * Exact options object passed to `@vercel/blob` `put`. Tests spy on this
  * call site — do not add a second `allowOverwrite` after spreading this.
  */
@@ -686,7 +701,7 @@ export async function vercelPut(
 }
 
 export async function vercelGet(pathname: string, signal?: AbortSignal): Promise<BlobGetResult | null> {
-  const result = await withAccess((a) => get(pathname, { access: a, useCache: false, abortSignal: signal }));
+  const result = await withAccess((a) => get(pathname, vercelGetLibraryOptions(a, signal)));
   if (result === null) return null;
   if (result.statusCode !== 200 || !result.stream) {
     throw new Error(`blob get status ${result.statusCode}`);
