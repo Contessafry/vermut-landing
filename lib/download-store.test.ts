@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { test } from "node:test";
-import { BlobUnknownError } from "@vercel/blob";
+import { BlobPreconditionFailedError, BlobUnknownError, get as blobGet, put as blobPut } from "@vercel/blob";
 import {
   LOOKBACK_DAYS,
+  READ_CONCURRENCY,
   RETENTION_DAYS,
+  SNAPSHOT_PATH,
   applyEvents,
   batchPath,
   blobPutOptions,
@@ -86,31 +89,56 @@ test("retention helpers: 91 days ago is out, tomorrow is future", () => {
 
 function createMemoryBlob(): BlobEventIO & {
   files: Map<string, string>;
+  etags: Map<string, string>;
   puts: number;
+  gets: number;
+  getPathnames: string[];
   lists: number;
   foldedLists: number;
   putOptions: Array<BlobPutOptions | undefined>;
 } {
   const files = new Map<string, string>();
+  const etags = new Map<string, string>();
+  let gen = 0;
   const io: BlobEventIO & {
     files: Map<string, string>;
+    etags: Map<string, string>;
     puts: number;
+    gets: number;
+    getPathnames: string[];
     lists: number;
     foldedLists: number;
     putOptions: Array<BlobPutOptions | undefined>;
   } = {
     files,
+    etags,
     puts: 0,
+    gets: 0,
+    getPathnames: [],
     lists: 0,
     foldedLists: 0,
     putOptions: [],
     async put(pathname, body, _signal, opts) {
       io.puts += 1;
       io.putOptions.push(opts);
+      const existing = files.has(pathname);
+      if (opts?.ifMatch) {
+        if (!existing || etags.get(pathname) !== opts.ifMatch) {
+          throw new BlobPreconditionFailedError();
+        }
+      } else if (opts?.allowOverwrite === false && existing) {
+        throw new BlobPreconditionFailedError();
+      }
       files.set(pathname, body);
+      const etag = `"${++gen}"`;
+      etags.set(pathname, etag);
     },
     async get(pathname) {
-      return files.has(pathname) ? (files.get(pathname) as string) : null;
+      io.gets += 1;
+      io.getPathnames.push(pathname);
+      if (!files.has(pathname)) return null;
+      if (!etags.has(pathname)) etags.set(pathname, `"t${++gen}"`);
+      return { body: files.get(pathname) as string, etag: etags.get(pathname) as string };
     },
     async list(prefix, cursor) {
       io.lists += 1;
@@ -137,7 +165,10 @@ function createMemoryBlob(): BlobEventIO & {
       return { folders: [...folders], blobs };
     },
     async del(pathnames) {
-      for (const p of pathnames) files.delete(p);
+      for (const p of pathnames) {
+        files.delete(p);
+        etags.delete(p);
+      }
     },
   };
   return io;
@@ -152,6 +183,17 @@ test("persistEvents puts with allowOverwrite true so a retry cannot double-count
   }
   assert.equal(blobPutOptions().allowOverwrite, true);
   assert.equal(io.files.has(batchPath("2026-10-30", "once")), true);
+});
+
+test("vercelPutLibraryOptions forwards ifMatch and keeps event puts overwrite-true without ifMatch", () => {
+  assert.equal(vercelPutLibraryOptions("private").ifMatch, undefined);
+  assert.equal(vercelPutLibraryOptions("private").allowOverwrite, true);
+  const conditional = vercelPutLibraryOptions("private", undefined, { allowOverwrite: true, ifMatch: '"abc123"' });
+  assert.equal(conditional.ifMatch, '"abc123"');
+  assert.equal(conditional.allowOverwrite, true);
+  const create = vercelPutLibraryOptions("private", undefined, { allowOverwrite: false });
+  assert.equal(create.allowOverwrite, false);
+  assert.equal(create.ifMatch, undefined);
 });
 
 test("vercelPut passes allowOverwrite true to the Blob library put()", async () => {
@@ -901,7 +943,9 @@ function createPagedBlob(files: Map<string, string>, pageSize = LIST_PAGE): Blob
       files.set(pathname, body);
     },
     async get(pathname) {
-      return files.get(pathname) ?? null;
+      const body = files.get(pathname);
+      if (body == null) return null;
+      return { body, etag: `"p${pathname.length}"` };
     },
     async list(prefix, cursor) {
       io.lists += 1;
@@ -947,5 +991,402 @@ test("listAll follows cursors: 2500 batches take 3 list pages and sum to 2500", 
       firstPage.pathnames.length,
       "first page alone is 1000; this assertion fails if listAll stops there",
     );
+  }
+});
+
+function seedBatches(
+  io: { files: Map<string, string> },
+  date: string,
+  n: number,
+  source = (i: number) => `src-${i}`,
+  path = (i: number) => (i % 2 === 0 ? "/" : "/it"),
+) {
+  for (let i = 0; i < n; i++) {
+    const id = `b${String(i).padStart(4, "0")}`;
+    io.files.set(
+      batchPath(date, id),
+      JSON.stringify({
+        date,
+        total: 1,
+        channels: { stable: 1 },
+        sources: { [source(i)]: 1 },
+        paths: { [path(i)]: 1 },
+      }),
+    );
+  }
+}
+
+function batchGetCount(io: { getPathnames: string[] }): number {
+  return io.getPathnames.filter((p) => p !== SNAPSHOT_PATH).length;
+}
+
+test("first stats read folds 129 batches; next read with no new batches does not get them again", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 129);
+  const rec = createRecorder({ io, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const full = await readCountedDay("2026-10-30", { io, now, timeoutMs: 5_000 });
+  assert.equal(full.status, "ok");
+  io.gets = 0;
+  io.getPathnames = [];
+
+  const first = await rec.readStats();
+  assert.equal(first.today.total, 129);
+  if (full.status === "ok") {
+    assert.equal(first.today.total, full.day.total);
+    assert.deepEqual(first.today.channels, full.day.channels);
+    assert.deepEqual(first.today.sources, full.day.sources);
+    assert.deepEqual(first.today.paths, full.day.paths);
+  }
+  assert.equal(batchGetCount(io), 129, "cold fold gets every new batch");
+  assert.equal(io.files.has(SNAPSHOT_PATH), true);
+  for (let i = 0; i < 129; i++) {
+    assert.equal(io.files.has(batchPath("2026-10-30", `b${String(i).padStart(4, "0")}`)), true, "in-window batches stay");
+  }
+
+  io.gets = 0;
+  io.getPathnames = [];
+  const second = await rec.readStats();
+  assert.equal(second.today.total, 129);
+  assert.deepEqual(second.today.sources, first.today.sources);
+  assert.deepEqual(second.today.paths, first.today.paths);
+  assert.equal(batchGetCount(io), 0, "unchanged window must not re-get incorporated batches");
+  assert.ok(io.getPathnames.includes(SNAPSHOT_PATH));
+});
+
+test("incremental stats get only batches not in the snapshot", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 4, (i) => `old-${i}`);
+  const rec = createRecorder({ io, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const first = await rec.readStats();
+  assert.equal(first.today.total, 4);
+  io.files.set(
+    batchPath("2026-10-30", "late"),
+    JSON.stringify({ date: "2026-10-30", total: 1, channels: { stable: 1 }, sources: { reddit: 1 }, paths: { "/guides": 1 } }),
+  );
+  io.gets = 0;
+  io.getPathnames = [];
+  const second = await rec.readStats();
+  assert.equal(second.today.total, 5);
+  assert.equal(second.today.sources.reddit, 1);
+  assert.equal(second.today.paths["/guides"], 1);
+  assert.equal(second.today.paths["/"], first.today.paths["/"]);
+  assert.deepEqual(
+    io.getPathnames.filter((p) => p !== SNAPSHOT_PATH),
+    [batchPath("2026-10-30", "late")],
+  );
+});
+
+test("129 batches plus two concurrent snapshot writers do not double-count", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 129);
+  const rec = createRecorder({ io, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const [a, b] = await Promise.all([rec.readStats(), rec.readStats()]);
+  assert.equal(a.today.total, 129);
+  assert.equal(b.today.total, 129);
+  assert.equal(a.last7Days.total, 129);
+  assert.equal(b.last7Days.total, 129);
+  assert.equal(a.today.paths["/"], 65);
+  assert.equal(a.today.paths["/it"], 64);
+  const third = await rec.readStats();
+  assert.equal(third.today.total, 129);
+});
+
+test("first-create snapshot conflict uses BlobPreconditionFailedError and keeps one fold", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 3, (i) => ["direct", "reddit", "github"][i] ?? "x");
+  let snapshotPuts = 0;
+  const wrapped: BlobEventIO = {
+    ...io,
+    async put(pathname, body, signal, opts) {
+      if (pathname === SNAPSHOT_PATH) {
+        snapshotPuts += 1;
+        if (snapshotPuts === 2) {
+          assert.equal(opts?.allowOverwrite, false, "first create must not overwrite");
+          throw new BlobPreconditionFailedError();
+        }
+      }
+      return io.put(pathname, body, signal, opts);
+    },
+  };
+  const rec = createRecorder({ io: wrapped, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const [a, b] = await Promise.all([rec.readStats(), rec.readStats()]);
+  assert.equal(a.today.total, 3);
+  assert.equal(b.today.total, 3);
+  assert.equal(a.today.sources.direct, 1);
+  assert.equal(a.today.sources.reddit, 1);
+  assert.equal(a.today.sources.github, 1);
+});
+
+test("stale snapshot writer reloads and merges by batch id", async () => {
+  const io = createMemoryBlob();
+  await persistEvents(click(1, "kept"), { io, now, batchId: "kept", sleep: async () => {}, timeoutMs: 200 });
+  const rec = createRecorder({ io, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  await rec.readStats();
+  await persistEvents(click(1, "late"), { io, now, batchId: "late", sleep: async () => {}, timeoutMs: 200 });
+
+  let snapshotGets = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  const racing: BlobEventIO = {
+    ...io,
+    async get(pathname, signal) {
+      const result = await io.get(pathname, signal);
+      if (pathname === SNAPSHOT_PATH) {
+        snapshotGets += 1;
+        if (snapshotGets <= 2) await gate;
+      }
+      return result;
+    },
+  };
+  const raced = createRecorder({ io: racing, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const first = raced.readStats();
+  const second = raced.readStats();
+  while (snapshotGets < 2) await new Promise((r) => setTimeout(r, 1));
+  release();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(a.today.total, 2);
+  assert.equal(b.today.total, 2);
+  assert.equal(a.today.sources.kept, 1);
+  assert.equal(a.today.sources.late, 1);
+});
+
+test("batch appended after list is picked up on the next stats read, not double-counted", async () => {
+  const io = createMemoryBlob();
+  await persistEvents(click(1, "early"), { io, now, batchId: "early", sleep: async () => {}, timeoutMs: 200 });
+  let injected = false;
+  const wrapped: BlobEventIO = {
+    ...io,
+    async list(prefix, cursor, signal) {
+      const page = await io.list(prefix, cursor, signal);
+      if (!injected && prefix === dayPrefix("2026-10-30")) {
+        injected = true;
+        io.files.set(
+          batchPath("2026-10-30", "after-list"),
+          JSON.stringify({
+            date: "2026-10-30",
+            total: 1,
+            channels: { stable: 1 },
+            sources: { late: 1 },
+            paths: { "/": 1 },
+          }),
+        );
+      }
+      return page;
+    },
+  };
+  const rec = createRecorder({ io: wrapped, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const first = await rec.readStats();
+  assert.equal(first.today.total, 1);
+  assert.equal(first.today.sources.early, 1);
+  assert.equal(first.today.sources.late, undefined);
+  const second = await rec.readStats();
+  assert.equal(second.today.total, 2);
+  assert.equal(second.today.sources.late, 1);
+});
+
+test("aborted snapshot put leaves batches intact; retry fold matches full read", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 5, (i) => `s${i}`);
+  const hung: BlobEventIO = {
+    ...io,
+    async put(pathname, body, signal, opts) {
+      if (pathname === SNAPSHOT_PATH) return hangUntilAbort(signal);
+      return io.put(pathname, body, signal, opts);
+    },
+  };
+  const rec = createRecorder({ io: hung, now, prune: false, sleep: async () => {}, timeoutMs: 200, readTimeoutMs: 40 });
+  await assert.rejects(() => rec.readStats(), /deadline exceeded|aborted/i);
+  assert.equal(io.files.has(SNAPSHOT_PATH), false);
+  for (let i = 0; i < 5; i++) assert.equal(io.files.has(batchPath("2026-10-30", `b${String(i).padStart(4, "0")}`)), true);
+
+  const rec2 = createRecorder({ io, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const stats = await rec2.readStats();
+  const full = await readCountedDay("2026-10-30", { io, now });
+  assert.equal(full.status, "ok");
+  if (full.status === "ok") {
+    assert.equal(stats.today.total, full.day.total);
+    assert.deepEqual(stats.today.sources, full.day.sources);
+    assert.deepEqual(stats.today.paths, full.day.paths);
+  }
+});
+
+test("corrupt snapshot is ignored and does not return zero totals", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 4, (i) => `c${i}`);
+  io.files.set(SNAPSHOT_PATH, "not-json");
+  const rec = createRecorder({ io, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  const stats = await rec.readStats();
+  assert.equal(stats.today.total, 4);
+  assert.notEqual(stats.today.total, 0);
+  assert.equal(Object.keys(stats.today.sources).length, 4);
+});
+
+test("snapshot get transport error is an error, not empty days", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 2);
+  const failing: BlobEventIO = {
+    ...io,
+    async get(pathname, signal) {
+      if (pathname === SNAPSHOT_PATH) throw new Error("503 Service Unavailable");
+      return io.get(pathname, signal);
+    },
+  };
+  const rec = createRecorder({ io: failing, now, prune: false, sleep: async () => {}, timeoutMs: 200 });
+  await assert.rejects(() => rec.readStats(), /503/);
+  const still = await readCountedDay("2026-10-30", { io, now });
+  assert.equal(still.status, "ok");
+  if (still.status === "ok") assert.equal(still.day.total, 2);
+});
+
+test("read concurrency is capped globally, not per day", async () => {
+  const io = createMemoryBlob();
+  seedBatches(io, "2026-10-30", 40);
+  seedBatches(io, "2026-10-29", 40, (i) => `d-${i}`);
+  seedBatches(io, "2026-10-28", 40, (i) => `e-${i}`);
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const delayed: BlobEventIO = {
+    ...io,
+    async get(pathname, signal) {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        await new Promise((r) => setTimeout(r, 4));
+        return io.get(pathname, signal);
+      } finally {
+        inFlight -= 1;
+      }
+    },
+  };
+  const rec = createRecorder({
+    io: delayed,
+    now,
+    prune: false,
+    sleep: async () => {},
+    timeoutMs: 200,
+    readTimeoutMs: 2_000,
+  });
+  const stats = await rec.readStats();
+  assert.equal(stats.last7Days.total, 120);
+  assert.ok(maxInFlight <= READ_CONCURRENCY, `maxInFlight=${maxInFlight} exceeds cap ${READ_CONCURRENCY}`);
+  assert.ok(maxInFlight >= 2, "gets must overlap");
+});
+
+test("pruneExpired does not delete the stats snapshot; in-window batches stay", async () => {
+  const io = createMemoryBlob();
+  const ancient = utcDate(NOON - 120 * 86_400_000);
+  io.files.set(SNAPSHOT_PATH, JSON.stringify({ v: 1, updatedAt: "2026-10-30T00:00:00.000Z", days: {}, incorporated: {} }));
+  io.files.set(batchPath("2026-10-30", "fresh"), JSON.stringify({ date: "2026-10-30", total: 1, channels: {}, sources: {}, paths: {} }));
+  io.files.set(legacyDayPath(ancient), JSON.stringify({ date: ancient, total: 8, channels: {}, sources: {}, paths: {} }));
+  await pruneExpired(io, NOON);
+  assert.equal(io.files.has(SNAPSHOT_PATH), true);
+  assert.equal(io.files.has(batchPath("2026-10-30", "fresh")), true);
+  assert.equal(io.files.has(legacyDayPath(ancient)), false);
+});
+
+test("download-store get always bypasses Blob CDN cache", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("./download-store.ts", import.meta.url), "utf8");
+  assert.match(src, /get\(pathname, \{ access: a, useCache: false, abortSignal: signal \}\)/);
+  assert.match(src, /etag: result\.blob\.etag/);
+});
+
+test("SDK put/get transport: ifMatch, create-exists 412, etag+cache=0 over local HTTP", async () => {
+  const prevToken = process.env.BLOB_READ_WRITE_TOKEN;
+  const prevRetries = process.env.VERCEL_BLOB_RETRIES;
+  const prevApi = process.env.VERCEL_BLOB_API_URL;
+  const token = "vercel_blob_rw_teststore_30FakeRandomCharacters123456";
+  const seen: Array<{ url: string; method: string; ifMatch: string | undefined; allowOverwrite: string | undefined }> = [];
+
+  const server = createServer((req, res) => {
+    seen.push({
+      url: req.url ?? "",
+      method: req.method ?? "",
+      ifMatch: req.headers["x-if-match"] as string | undefined,
+      allowOverwrite: req.headers["x-allow-overwrite"] as string | undefined,
+    });
+    if (req.method === "PUT") {
+      res.writeHead(412, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { code: "precondition_failed", message: "etag mismatch" } }));
+      return;
+    }
+    if (req.method === "GET") {
+      res.writeHead(200, {
+        etag: '"snap-1"',
+        "content-type": "application/json",
+        "content-length": "11",
+      });
+      res.end('{"ok":true}');
+      return;
+    }
+    res.statusCode = 404;
+    res.end();
+  });
+
+  const origin = await new Promise<string>((resolve, reject) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") {
+        reject(new Error("listen failed"));
+        return;
+      }
+      resolve(`http://127.0.0.1:${addr.port}`);
+    });
+  });
+
+  process.env.BLOB_READ_WRITE_TOKEN = token;
+  process.env.VERCEL_BLOB_RETRIES = "0";
+  process.env.VERCEL_BLOB_API_URL = origin;
+
+  try {
+    await assert.rejects(
+      () =>
+        blobPut("download-counts/snapshot.json", "{}", {
+          access: "private",
+          token,
+          allowOverwrite: true,
+          ifMatch: '"abc123"',
+        }),
+      (err: unknown) => err instanceof BlobPreconditionFailedError,
+    );
+    const update = seen.find((s) => s.method === "PUT" && s.ifMatch === '"abc123"');
+    assert.ok(update, `put must send x-if-match, seen=${JSON.stringify(seen)}`);
+    assert.equal(update?.allowOverwrite, "1");
+
+    seen.length = 0;
+    await assert.rejects(
+      () =>
+        blobPut("download-counts/snapshot.json", "{}", {
+          access: "private",
+          token,
+          allowOverwrite: false,
+        }),
+      (err: unknown) => err instanceof BlobPreconditionFailedError,
+    );
+    const create = seen.find((s) => s.method === "PUT");
+    assert.equal(create?.allowOverwrite, "0");
+    assert.equal(create?.ifMatch, undefined);
+
+    seen.length = 0;
+    const got = await blobGet(`${origin}/download-counts/snapshot.json`, {
+      access: "private",
+      useCache: false,
+      token,
+    });
+    assert.ok(got);
+    assert.equal(got.statusCode, 200);
+    assert.equal(got.blob.etag, '"snap-1"');
+    assert.ok(seen.some((s) => s.method === "GET" && s.url.includes("cache=0")));
+    assert.equal(await new Response(got.stream).text(), '{"ok":true}');
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    if (prevToken === undefined) delete process.env.BLOB_READ_WRITE_TOKEN;
+    else process.env.BLOB_READ_WRITE_TOKEN = prevToken;
+    if (prevRetries === undefined) delete process.env.VERCEL_BLOB_RETRIES;
+    else process.env.VERCEL_BLOB_RETRIES = prevRetries;
+    if (prevApi === undefined) delete process.env.VERCEL_BLOB_API_URL;
+    else process.env.VERCEL_BLOB_API_URL = prevApi;
   }
 });
