@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { BlobPreconditionFailedError, BlobUnknownError, get as blobGet, put as blobPut } from "@vercel/blob";
+import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
+import {
+  BlobPreconditionFailedError,
+  BlobUnknownError,
+  get as blobGet,
+  put as blobPut,
+} from "@vercel/blob";
 import {
   LOOKBACK_DAYS,
   READ_CONCURRENCY,
@@ -19,18 +28,22 @@ import {
   legacyDayPath,
   mergeDays,
   parseDayCounts,
+  parseSnapshot,
   parseUtcDate,
   LIST_PAGE,
   persistEvents,
   pruneExpired,
   readCountedDay,
   utcDate,
+  vercelGetLibraryOptions,
+  vercelIO,
   vercelPut,
   vercelPutLibraryOptions,
   type BlobEventIO,
   type BlobPutOptions,
   type ClickEvent,
   type DayCounts,
+  type SnapshotFile,
 } from "./download-store.ts";
 
 const click = (n = 1, source = "direct", path = "/"): ClickEvent[] =>
@@ -1289,8 +1302,10 @@ test("pruneExpired does not delete the stats snapshot; in-window batches stay", 
 test("download-store get always bypasses Blob CDN cache", async () => {
   const { readFile } = await import("node:fs/promises");
   const src = await readFile(new URL("./download-store.ts", import.meta.url), "utf8");
-  assert.match(src, /get\(pathname, \{ access: a, useCache: false, abortSignal: signal \}\)/);
+  assert.match(src, /get\(pathname, vercelGetLibraryOptions\(a, signal\)\)/);
   assert.match(src, /etag: result\.blob\.etag/);
+  assert.equal(vercelGetLibraryOptions("private").useCache, false);
+  assert.equal(vercelGetLibraryOptions("private").headers["Accept-Encoding"], "identity");
 });
 
 test("SDK put/get transport: ifMatch, create-exists 412, etag+cache=0 over local HTTP", async () => {
@@ -1388,5 +1403,384 @@ test("SDK put/get transport: ifMatch, create-exists 412, etag+cache=0 over local
     else process.env.VERCEL_BLOB_RETRIES = prevRetries;
     if (prevApi === undefined) delete process.env.VERCEL_BLOB_API_URL;
     else process.env.VERCEL_BLOB_API_URL = prevApi;
+  }
+});
+
+/** Runtime get() fixture: 7 UTC days, incorporated counts = day totals = 381. */
+const FIXTURE_DAY_TOTALS: Record<string, number> = {
+  "2026-10-31": 43,
+  "2026-11-01": 34,
+  "2026-11-02": 37,
+  "2026-11-03": 43,
+  "2026-11-04": 34,
+  "2026-11-05": 53,
+  "2026-11-06": 137,
+};
+
+function fixtureSnapshotFile(): SnapshotFile {
+  const days: SnapshotFile["days"] = {};
+  const incorporated: SnapshotFile["incorporated"] = {};
+  let n = 0;
+  for (const [date, total] of Object.entries(FIXTURE_DAY_TOTALS)) {
+    const ids = Array.from({ length: total }, () => {
+      n += 1;
+      return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+    });
+    incorporated[date] = ids;
+    days[date] = {
+      date,
+      updatedAt: "2026-11-06T21:14:19.037Z",
+      total,
+      channels: { stable: total },
+      sources: { direct: total },
+      paths: { "/": total },
+    };
+  }
+  return { v: 1, updatedAt: "2026-11-06T21:14:19.037Z", days, incorporated };
+}
+
+const FIXTURE_WEAK_ETAG = 'W/"06f7a9b7c88d68915fa0db6221a7fcf5"';
+const FIXTURE_STRONG_ETAG = '"06f7a9b7c88d68915fa0db6221a7fcf5"';
+const LOCAL_BLOB_TOKEN = "vercel_blob_rw_teststore_30FakeRandomCharacters123456";
+
+function streamKind(stream: unknown): string {
+  if (stream == null) return "null";
+  if (typeof stream === "object" && Symbol.asyncIterator in stream) return "asyncIterable";
+  if (typeof ReadableStream !== "undefined" && stream instanceof ReadableStream) return "ReadableStream";
+  return typeof stream;
+}
+
+function wantsIdentityEncoding(req: IncomingMessage): boolean {
+  return /^\s*identity\s*$/i.test(String(req.headers["accept-encoding"] ?? ""));
+}
+
+function sendPreconditionFailed(res: ServerResponse) {
+  res.writeHead(412, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: { code: "precondition_failed", message: "etag mismatch" } }));
+}
+
+async function listenOrigin(server: ReturnType<typeof createServer>): Promise<string> {
+  return new Promise((resolve, reject) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") {
+        reject(new Error("listen failed"));
+        return;
+      }
+      resolve(`http://127.0.0.1:${addr.port}`);
+    });
+  });
+}
+
+async function withLocalBlobEnv<T>(origin: string, fn: () => Promise<T>): Promise<T> {
+  const prevToken = process.env.BLOB_READ_WRITE_TOKEN;
+  const prevRetries = process.env.VERCEL_BLOB_RETRIES;
+  const prevApi = process.env.VERCEL_BLOB_API_URL;
+  const prevAccess = process.env.BLOB_ACCESS;
+  process.env.BLOB_READ_WRITE_TOKEN = LOCAL_BLOB_TOKEN;
+  process.env.VERCEL_BLOB_RETRIES = "0";
+  process.env.VERCEL_BLOB_API_URL = origin;
+  process.env.BLOB_ACCESS = "private";
+  try {
+    return await fn();
+  } finally {
+    if (prevToken === undefined) delete process.env.BLOB_READ_WRITE_TOKEN;
+    else process.env.BLOB_READ_WRITE_TOKEN = prevToken;
+    if (prevRetries === undefined) delete process.env.VERCEL_BLOB_RETRIES;
+    else process.env.VERCEL_BLOB_RETRIES = prevRetries;
+    if (prevApi === undefined) delete process.env.VERCEL_BLOB_API_URL;
+    else process.env.VERCEL_BLOB_API_URL = prevApi;
+    if (prevAccess === undefined) delete process.env.BLOB_ACCESS;
+    else process.env.BLOB_ACCESS = prevAccess;
+  }
+}
+
+async function withBlobCdnRewrite<T>(localOrigin: string, fn: () => Promise<T>): Promise<T> {
+  const blobEntry = fileURLToPath(import.meta.resolve("@vercel/blob"));
+  const undiciRoot = join(dirname(blobEntry), "..", "node_modules", "undici");
+  const undici = createRequire(join(undiciRoot, "package.json"))(undiciRoot) as {
+    Agent: new () => { close: () => Promise<void>; dispatch: (opts: object, handler: unknown) => boolean };
+    getGlobalDispatcher: () => unknown;
+    setGlobalDispatcher: (d: unknown) => void;
+  };
+  const inner = new undici.Agent();
+  const prev = undici.getGlobalDispatcher();
+  undici.setGlobalDispatcher({
+    dispatch(opts: { origin?: string }, handler: unknown) {
+      if (String(opts.origin).includes(".blob.vercel-storage.com")) {
+        return inner.dispatch({ ...opts, origin: localOrigin }, handler);
+      }
+      return inner.dispatch(opts, handler);
+    },
+  });
+  try {
+    return await fn();
+  } finally {
+    undici.setGlobalDispatcher(prev);
+    await inner.close();
+  }
+}
+
+function createCdnBlobServer() {
+  const files = new Map<string, { body: string; strongEtag: string }>();
+  let gen = 0;
+  let origin = "http://127.0.0.1";
+  const gets: Array<{ url: string; acceptEncoding: string | undefined }> = [];
+  const puts: Array<{ pathname: string; ifMatch: string | undefined; allowOverwrite: string | undefined }> = [];
+
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", origin);
+    if (req.method === "PUT") {
+      const pathname = url.searchParams.get("pathname") ?? url.pathname.replace(/^\//, "");
+      const chunks: Buffer[] = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf8");
+        const ifMatch = req.headers["x-if-match"] as string | undefined;
+        const allowOverwrite = req.headers["x-allow-overwrite"] as string | undefined;
+        puts.push({ pathname, ifMatch, allowOverwrite });
+        const existing = files.get(pathname);
+        if (ifMatch) {
+          if (ifMatch.startsWith("W/") || !existing || existing.strongEtag !== ifMatch) {
+            sendPreconditionFailed(res);
+            return;
+          }
+        } else if (allowOverwrite === "0" && existing) {
+          sendPreconditionFailed(res);
+          return;
+        }
+        const strongEtag = `"${(++gen).toString(16).padStart(32, "0")}"`;
+        files.set(pathname, { body, strongEtag });
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            url: `${origin}/${pathname}`,
+            downloadUrl: `${origin}/${pathname}?download=1`,
+            pathname,
+            contentType: "application/json",
+            contentDisposition: `inline; filename="${pathname.split("/").pop()}"`,
+            etag: strongEtag,
+          }),
+        );
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.searchParams.has("prefix")) {
+      const prefix = url.searchParams.get("prefix") ?? "";
+      const blobs = [...files.entries()]
+        .filter(([pathname]) => pathname.startsWith(prefix))
+        .map(([pathname, file]) => ({
+          url: `${origin}/${pathname}`,
+          downloadUrl: `${origin}/${pathname}?download=1`,
+          pathname,
+          size: Buffer.byteLength(file.body),
+          uploadedAt: "2026-11-06T21:14:20.000Z",
+          etag: file.strongEtag,
+        }));
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ blobs, hasMore: false, cursor: null }));
+      return;
+    }
+
+    if (req.method === "GET") {
+      const pathname = url.pathname.replace(/^\//, "");
+      gets.push({ url: req.url ?? "", acceptEncoding: req.headers["accept-encoding"] as string | undefined });
+      const file = files.get(pathname);
+      if (!file) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      const raw = Buffer.from(file.body);
+      if (wantsIdentityEncoding(req)) {
+        res.writeHead(200, {
+          etag: file.strongEtag,
+          "content-type": "application/json",
+          "content-length": String(raw.length),
+          "cache-control": "no-store",
+          "content-disposition": 'inline; filename="snapshot.json"',
+        });
+        res.end(raw);
+        return;
+      }
+      const gzipped = gzipSync(raw);
+      res.writeHead(200, {
+        etag: `W/${file.strongEtag}`,
+        "content-type": "application/json",
+        "content-encoding": "gzip",
+        "cache-control": "no-store",
+        "content-disposition": 'inline; filename="snapshot.json"',
+        "transfer-encoding": "chunked",
+      });
+      res.write(gzipped);
+      res.end();
+      return;
+    }
+
+    res.statusCode = 404;
+    res.end();
+  });
+
+  return {
+    server,
+    files,
+    gets,
+    puts,
+    setOrigin(next: string) {
+      origin = next;
+    },
+    seed(pathname: string, body: string, strongEtag: string) {
+      files.set(pathname, { body, strongEtag });
+    },
+  };
+}
+
+test("parseSnapshot accepts the runtime 7-day snapshot shape (381 incorporated batches)", () => {
+  const file = fixtureSnapshotFile();
+  const text = JSON.stringify(file);
+  assert.ok(text.length > 15_000, `fixture bodyBytes=${text.length}`);
+  const parsed = parseSnapshot(text);
+  assert.ok(parsed);
+  assert.equal(parsed?.v, 1);
+  assert.deepEqual(Object.keys(parsed?.days ?? {}), Object.keys(FIXTURE_DAY_TOTALS));
+  assert.equal(parsed?.days["2026-11-06"]?.total, 137);
+  assert.equal(parsed?.incorporated["2026-11-06"]?.length, 137);
+  assert.equal(
+    Object.values(parsed?.incorporated ?? {}).reduce((n, ids) => n + ids.length, 0),
+    381,
+  );
+});
+
+test("SDK get of gzip CDN snapshot matches runtime fixture; weak ifMatch 412s; identity ifMatch succeeds", async () => {
+  const blob = createCdnBlobServer();
+  const body = JSON.stringify(fixtureSnapshotFile());
+  blob.seed(SNAPSHOT_PATH, body, FIXTURE_STRONG_ETAG);
+  const origin = await listenOrigin(blob.server);
+  blob.setOrigin(origin);
+
+  await withLocalBlobEnv(origin, async () => {
+    const gzipGot = await blobGet(`${origin}/${SNAPSHOT_PATH}`, {
+      access: "private",
+      useCache: false,
+      token: LOCAL_BLOB_TOKEN,
+    });
+    assert.ok(gzipGot);
+    assert.equal(gzipGot.statusCode, 200);
+    assert.equal(gzipGot.blob.etag, FIXTURE_WEAK_ETAG);
+    assert.equal(gzipGot.blob.size, 0);
+    assert.equal(gzipGot.blob.contentType, "application/json");
+    assert.equal(gzipGot.blob.cacheControl, "no-store");
+    assert.equal(streamKind(gzipGot.stream), "asyncIterable");
+    assert.equal(gzipGot.headers.get("content-encoding"), "gzip");
+    const gzipText = await new Response(gzipGot.stream).text();
+    const parsed = parseSnapshot(gzipText);
+    assert.ok(parsed);
+    assert.equal(parsed?.days["2026-11-06"]?.total, 137);
+
+    await assert.rejects(
+      () =>
+        blobPut(SNAPSHOT_PATH, gzipText, {
+          access: "private",
+          token: LOCAL_BLOB_TOKEN,
+          allowOverwrite: true,
+          ifMatch: gzipGot.blob.etag,
+        }),
+      (err: unknown) => err instanceof BlobPreconditionFailedError,
+    );
+    assert.equal(blob.puts.at(-1)?.ifMatch, FIXTURE_WEAK_ETAG);
+
+    const identityGot = await blobGet(`${origin}/${SNAPSHOT_PATH}`, {
+      ...vercelGetLibraryOptions("private"),
+      token: LOCAL_BLOB_TOKEN,
+    });
+    assert.ok(identityGot);
+    assert.equal(identityGot.blob.etag, FIXTURE_STRONG_ETAG);
+    assert.equal(identityGot.blob.size, body.length);
+    assert.equal(identityGot.headers.get("content-encoding"), null);
+    assert.ok(blob.gets.some((g) => g.acceptEncoding === "identity" && g.url.includes("cache=0")));
+    const identityText = await new Response(identityGot.stream).text();
+    assert.equal(parseSnapshot(identityText)?.days["2026-11-06"]?.total, 137);
+
+    await blobPut(SNAPSHOT_PATH, identityText, {
+      access: "private",
+      token: LOCAL_BLOB_TOKEN,
+      allowOverwrite: true,
+      ifMatch: identityGot.blob.etag,
+    });
+    assert.equal(blob.puts.at(-1)?.ifMatch, FIXTURE_STRONG_ETAG);
+    assert.notEqual(blob.files.get(SNAPSHOT_PATH)?.strongEtag, FIXTURE_STRONG_ETAG);
+  });
+
+  await new Promise<void>((resolve, reject) => blob.server.close((err) => (err ? reject(err) : resolve())));
+});
+
+test("vercelIO bootstrap, idle reread, incremental append, concurrent readers against gzip CDN", async () => {
+  const blob = createCdnBlobServer();
+  const statsNow = () => Date.parse("2026-11-06T12:00:00.000Z");
+  const today = "2026-11-06";
+  const dayBody = (id: string) =>
+    JSON.stringify({ date: today, total: 1, channels: { stable: 1 }, sources: { [id]: 1 }, paths: { "/": 1 } });
+  for (const id of ["early", "kept"]) blob.seed(batchPath(today, id), dayBody(id), `"${id}"`);
+  const origin = await listenOrigin(blob.server);
+  blob.setOrigin(origin);
+
+  try {
+    await withLocalBlobEnv(origin, () =>
+      withBlobCdnRewrite(origin, async () => {
+        const rec = createRecorder({ io: vercelIO, now: statsNow, prune: false, sleep: async () => {}, timeoutMs: 200 });
+        const bootstrap = await rec.readStats();
+        assert.equal(bootstrap.today.total, 2);
+        const create = blob.puts.find((p) => p.pathname === SNAPSHOT_PATH);
+        assert.equal(create?.allowOverwrite, "0");
+        assert.equal(create?.ifMatch, undefined);
+
+        blob.gets.length = 0;
+        blob.puts.length = 0;
+        const idle = await rec.readStats();
+        assert.equal(idle.today.total, 2);
+        assert.equal(
+          blob.puts.filter((p) => p.pathname === SNAPSHOT_PATH).length,
+          0,
+          "idle reread must not rewrite the snapshot",
+        );
+        assert.ok(blob.gets.some((g) => g.url.includes(SNAPSHOT_PATH) && g.acceptEncoding === "identity"));
+
+        const gzipGot = await blobGet(`${origin}/${SNAPSHOT_PATH}`, {
+          access: "private",
+          useCache: false,
+          token: LOCAL_BLOB_TOKEN,
+        });
+        assert.ok(gzipGot);
+        assert.equal(gzipGot.statusCode, 200);
+        assert.match(gzipGot.blob.etag, /^W\/"/);
+        assert.equal(gzipGot.blob.size, 0);
+        assert.equal(gzipGot.headers.get("content-encoding"), "gzip");
+        assert.equal(gzipGot.blob.cacheControl, "no-store");
+        if (gzipGot.stream && "getReader" in gzipGot.stream) await gzipGot.stream.getReader().cancel();
+
+        blob.seed(batchPath(today, "late"), dayBody("late"), '"late"');
+        blob.puts.length = 0;
+        const incremental = await rec.readStats();
+        assert.equal(incremental.today.total, 3);
+        assert.equal(incremental.today.sources.late, 1);
+        const update = blob.puts.filter((p) => p.pathname === SNAPSHOT_PATH && p.ifMatch);
+        assert.ok(update.length >= 1, "incremental fold must persist with ifMatch");
+        assert.equal(
+          update.every((p) => typeof p.ifMatch === "string" && !p.ifMatch.startsWith("W/")),
+          true,
+          `ifMatch must be the strong validator, seen=${JSON.stringify(update)}`,
+        );
+
+        blob.seed(batchPath(today, "race"), dayBody("race"), '"race"');
+        const [a, b] = await Promise.all([rec.readStats(), rec.readStats()]);
+        assert.equal(a.today.total, 4);
+        assert.equal(b.today.total, 4);
+        assert.equal(a.today.sources.race, 1);
+        assert.equal(b.today.sources.race, 1);
+      }),
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) => blob.server.close((err) => (err ? reject(err) : resolve())));
   }
 });
