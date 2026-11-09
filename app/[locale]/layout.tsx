@@ -6,6 +6,7 @@ import { LocaleSuggest } from "@/components/locale-suggest";
 import { fontVars } from "@/lib/fonts";
 import { getDictionaryFor } from "@/lib/i18n";
 import { hasLocale, languageAlternates, localeInfo, localePath, locales, type Locale } from "@/lib/i18n/config";
+import { openGraphImage, twitterImage } from "@/lib/social-metadata";
 import { site, verification } from "@/site.config";
 import "../globals.css";
 
@@ -42,8 +43,9 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
       description,
       locale: localeInfo[locale].og,
       alternateLocale: locales.filter((l) => l !== locale).map((l) => localeInfo[l].og),
+      ...openGraphImage,
     },
-    twitter: { card: "summary_large_image", title, description },
+    twitter: { card: "summary_large_image", title, description, ...twitterImage },
     robots: { index: true, follow: true },
     formatDetection: { telephone: false, email: false, address: false },
   };

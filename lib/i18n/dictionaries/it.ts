@@ -27,9 +27,9 @@ export const it = build({
       "Vermut",
     ],
   },
-  nav: ["Come funziona", "Compatibilità", "Confronto", "Sostienici", "FAQ", "Scarica"],
+  nav: ["Come funziona", "Compatibilità", "Confronto", "Sostienici", "FAQ", "Guide", "Scarica"],
   hero: {
-    eyebrow: "Gratis · Open source · Apple Silicon",
+    eyebrow: "Giochi Windows sul tuo Mac",
     lead: "Vermut installa Steam sul tuo Mac, aggiunge la tua libreria Epic Games (beta) e configura Wine per ciascuno: i tuoi giochi Windows partono con un clic.",
     primary: "Scarica per Mac",
     secondary: "Metti una stella su GitHub",
@@ -166,7 +166,7 @@ export const it = build({
       { q: "Quale versione di macOS serve?", a: [`${macos}.`] },
       {
         q: "Il mio gioco funzionerà?",
-        a: ["Dipende dal gioco. La maggior parte dei titoli DirectX da 9 a 11 sì; quelli con anti-cheat a livello kernel no. Il quadro completo è nella sezione ", { text: "compatibilità", href: "#compatibility" }, "."],
+        a: ["Dipende dal gioco. La maggior parte dei titoli DirectX da 9 a 11 sì; quelli con anti-cheat a livello kernel no. Il quadro completo è nella sezione ", { text: "compatibilità", href: "#compatibility" }, " e nella ", { text: "guida ai giochi Steam su Apple Silicon", href: "/run-windows-steam-games-on-apple-silicon" }, "."],
       },
       {
         q: "Vermut vede la mia password di Steam o di Epic?",
@@ -182,6 +182,8 @@ export const it = build({
         a: [
           "Vermut è gratuito e open source, e non è firmato con un Apple Developer ID a pagamento né autenticato da Apple: per questo Gatekeeper non può garantirlo. Basta autorizzarlo una volta in Impostazioni di Sistema › Privacy e sicurezza (vedi ",
           { text: "i passaggi per il primo avvio", href: "#download" },
+          " e la ",
+          { text: "guida ad Apri comunque", href: "/open-anyway-unnotarized-app-mac" },
           "). Puoi leggere il ",
           { text: "codice sorgente", href: links.github },
           " e confrontare lo SHA-256 del DMG con quello riportato in questa pagina.",
@@ -190,7 +192,7 @@ export const it = build({
       { q: "Mi servono il Terminale o Homebrew?", a: ["No. Fai tutto dall’app, dall’installazione di uno store all’avvio di un gioco."] },
       {
         q: "In cosa è diverso da Whisky?",
-        a: ["Whisky era un’interfaccia generica per Wine e non è più mantenuto. Vermut è costruito attorno agli store di giochi: una bottiglia per store, configurata per te, e una Library per tutto quello che installi."],
+        a: ["Whisky era un’interfaccia generica per Wine e non è più mantenuto. Vermut è costruito attorno agli store di giochi: una bottiglia per store, configurata per te, e una Library per tutto quello che installi. Più dettagli nella ", { text: "guida all’alternativa gratuita a Whisky", href: "/free-whisky-alternative-mac" }, "."],
       },
       { q: "Come lo disinstallo?", a: ["Elimina ogni bottiglia dalla sua sezione Danger zone in Vermut (rimuove lo store e i suoi giochi), poi trascina Vermut nel Cestino."] },
     ],

@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { getLocale } from "@/lib/i18n";
 import { hasLocale, localeInfo, locales } from "@/lib/i18n/config";
 import { guideHref, loadGuides } from "@/lib/guides";
+import { openGraphImage, twitterImage } from "@/lib/social-metadata";
 import { site } from "@/site.config";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/guides">): Promise<Metadata> {
@@ -20,7 +21,9 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/guides">
     openGraph: {
       type: "website", url: path, siteName: "Vermut", title: ui.hub.metaTitle, description: ui.hub.description,
       locale: localeInfo[locale].og, alternateLocale: locales.filter((o) => o !== locale).map((o) => localeInfo[o].og),
+      ...openGraphImage,
     },
+    twitter: { card: "summary_large_image", title: ui.hub.metaTitle, description: ui.hub.description, ...twitterImage },
   };
 }
 

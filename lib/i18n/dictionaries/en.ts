@@ -13,6 +13,7 @@ const nav: readonly NavItem[] = [
   { label: "Compare", href: "#compare" },
   { label: "Support", href: "#support" },
   { label: "FAQ", href: "#faq" },
+  { label: "Guides", href: "/guides" },
   { label: "Download", href: "#download" },
 ];
 
@@ -21,7 +22,7 @@ export const en = {
   nav,
 
   hero: {
-    eyebrow: "Free · Open source · Apple Silicon",
+    eyebrow: "Windows games on your Mac",
     title: ["Pour.", "Click.", "Play."] as const,
     lead: "Vermut installs Steam on your Mac, adds your Epic Games library (beta), and sets up Wine for each, so your Windows games launch with a click.",
     primary: { label: "Download for Mac", href: links.downloadSection },
@@ -252,7 +253,7 @@ export const en = {
       { q: "Is Vermut really free?", a: [`Yes. It's open source under the ${site.license} licence, with no account, no paid tier and no telemetry.`] },
       { q: "Does it work on Intel Macs?", a: ["No. Vermut is built for Apple Silicon: M1 and every chip since."] },
       { q: "Which version of macOS do I need?", a: [`macOS ${site.minMacOS.replace(/\.0$/, "")} ${site.minMacOSName} or later.`] },
-      { q: "Will my game run?", a: ["It depends on the game. Most DirectX 9 to 11 games do; games with kernel-level anti-cheat don't. See ", { text: "compatibility", href: "#compatibility" }, " for the full picture."] },
+      { q: "Will my game run?", a: ["It depends on the game. Most DirectX 9 to 11 games do; games with kernel-level anti-cheat don't. See ", { text: "compatibility", href: "#compatibility" }, " for the full picture, and the ", { text: "guide to Steam games on Apple Silicon", href: "/run-windows-steam-games-on-apple-silicon" }, "."] },
       { q: "Does Vermut see my Steam or Epic password?", a: ["No. For Steam you sign in inside the official Steam app, running in its own bottle. For Epic (beta) you sign in on Epic's own login page, and Legendary keeps the session on your Mac."] },
       { q: "Does Vermut install the Epic Games Launcher?", a: ["No. Epic support is in beta and uses ", { text: "Legendary", href: "https://github.com/derrod/legendary" }, ", an open-source Epic client: sign in, see your library, install and launch games, without the Epic Games Launcher."] },
       { q: "Does it include Apple's Game Porting Toolkit?", a: ["No, Vermut never bundles it. If you install it yourself, Vermut detects it and offers D3DMetal as a graphics option."] },
@@ -261,13 +262,15 @@ export const en = {
         a: [
           "Vermut is free and open source, and it isn't signed with a paid Apple Developer ID or notarized, so Gatekeeper can't vouch for it. Allow it once in System Settings › Privacy & Security (see ",
           { text: "the first-launch steps", href: "#download" },
+          " and the ",
+          { text: "Open Anyway guide", href: "/open-anyway-unnotarized-app-mac" },
           "). You can review the ",
           { text: "source code", href: links.github },
           " and compare the DMG's SHA-256 with the one on this page.",
         ],
       },
       { q: "Do I need Terminal or Homebrew?", a: ["No. Everything happens in the app, from installing a store to launching a game."] },
-      { q: "How is it different from Whisky?", a: ["Whisky was a general-purpose Wine wrapper and is no longer maintained. Vermut is built around game stores: one bottle per store, set up for you, with a Library for everything you install."] },
+      { q: "How is it different from Whisky?", a: ["Whisky was a general-purpose Wine wrapper and is no longer maintained. Vermut is built around game stores: one bottle per store, set up for you, with a Library for everything you install. More in the ", { text: "free Whisky alternative guide", href: "/free-whisky-alternative-mac" }, "."] },
       { q: "How do I uninstall it?", a: ["Delete each bottle from its Danger zone in Vermut, which removes the store and its games, then drag Vermut to the Trash."] },
     ] as readonly Faq[],
     requirements: {
