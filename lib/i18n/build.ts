@@ -1,4 +1,6 @@
+import { guideHref } from "@/lib/guides";
 import type { Dictionary } from ".";
+import { hasLocale } from "./config";
 import { en } from "./dictionaries/en";
 import type { Rich } from "./types";
 
@@ -10,8 +12,8 @@ import type { Rich } from "./types";
 export type Translation = {
   locale: string;
   seo: { title: string; description: string; keywords: readonly string[] };
-  /** How it works, Compatibility, Compare, Support, FAQ, Download */
-  nav: readonly [string, string, string, string, string, string];
+  /** How it works, Compatibility, Compare, Support, FAQ, Guides, Download */
+  nav: readonly [string, string, string, string, string, string, string];
   hero: {
     eyebrow: string;
     lead: string;
@@ -77,6 +79,16 @@ function same<T>(name: string, a: readonly unknown[], b: readonly T[]): readonly
   return b;
 }
 
+/** Prefix locale on in-site paths (`/guides`, `/slug`); leave hashes and absolute URLs. */
+function localizeHref(locale: string, href: string): string {
+  if (!href.startsWith("/") || href.startsWith("//") || !hasLocale(locale)) return href;
+  return guideHref(locale, href.slice(1));
+}
+
+function localizeRich(locale: string, value: Rich): Rich {
+  return value.map((part) => (typeof part === "string" ? part : { ...part, href: localizeHref(locale, part.href) }));
+}
+
 export function build(t: Translation): Dictionary {
   const steps = same(`${t.locale} howItWorks.steps`, en.howItWorks.steps, t.howItWorks.steps);
   const groups = same(`${t.locale} compatibility.groups`, en.compatibility.groups, t.compatibility.groups);
@@ -89,7 +101,7 @@ export function build(t: Translation): Dictionary {
     ...en,
     locale: t.locale,
     seo: t.seo,
-    nav: en.nav.map((n, i) => ({ ...n, label: t.nav[i] })),
+    nav: en.nav.map((n, i) => ({ ...n, label: t.nav[i], href: localizeHref(t.locale, n.href) })),
     hero: {
       ...en.hero,
       eyebrow: t.hero.eyebrow,
@@ -143,7 +155,7 @@ export function build(t: Translation): Dictionary {
       ...en.faq,
       eyebrow: t.faq.eyebrow,
       title: t.faq.title,
-      items: faq,
+      items: faq.map((item) => ({ q: item.q, a: localizeRich(t.locale, item.a) })),
       requirements: { title: t.faq.requirements.title, items: req },
     },
     download: { ...en.download, ...t.download },

@@ -9,6 +9,7 @@ import { guideAlternates, guideHref, guidesUpdated, homeHash, loadGuides, type G
 import { plain } from "@/lib/structured-data";
 import { downloadHref } from "@/lib/download-core";
 import { getRelease } from "@/lib/release";
+import { openGraphImage, twitterImage } from "@/lib/social-metadata";
 import { site } from "@/site.config";
 import { GitHubIcon } from "./icons";
 import { LanguageSwitcher } from "./language-switcher";
@@ -31,8 +32,9 @@ export async function guideMetadata(locale: string, slug: string): Promise<Metad
     openGraph: {
       type: "article", url: path, siteName: "Vermut", title: g.metaTitle, description: g.description,
       locale: localeInfo[l].og, alternateLocale: locales.filter((o) => o !== l).map((o) => localeInfo[o].og),
+      ...openGraphImage,
     },
-    twitter: { card: "summary_large_image", title: g.metaTitle, description: g.description },
+    twitter: { card: "summary_large_image", title: g.metaTitle, description: g.description, ...twitterImage },
   };
 }
 

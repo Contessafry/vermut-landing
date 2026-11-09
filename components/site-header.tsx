@@ -14,7 +14,7 @@ export async function SiteHeader() {
       <nav aria-label={content.ui.primaryNav} className="flex items-center gap-1">
         <ul className="hidden items-center gap-1 md:flex">
           {content.nav.map((item) => (
-            <li key={item.href}>
+            <li key={item.href} className={item.href.endsWith("/guides") ? "max-lg:hidden" : undefined}>
               <a
                 href={item.href}
                 className="rounded-md px-3 py-2 text-[0.9375rem] font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white"

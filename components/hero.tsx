@@ -16,14 +16,16 @@ export async function Hero() {
       <SiteHeader />
       <div className="container-page grid-page items-center pt-10 pb-0 md:pt-16 lg:pt-20 lg:pb-24">
         <div className="col-span-full lg:col-span-6">
-          <p className="font-mono text-eyebrow uppercase text-white">{hero.eyebrow}</p>
-          <h1 id="hero-title" lang="en" className="mt-6 font-display text-display font-extrabold">
+          <h1 id="hero-title" className="font-mono text-eyebrow uppercase text-white">
+            {hero.eyebrow}
+          </h1>
+          <p lang="en" className="mt-6 font-display text-display font-extrabold">
             {hero.title.map((line) => (
               <span key={line} className="block">
                 {line}
               </span>
             ))}
-          </h1>
+          </p>
           <p className="mt-8 max-w-[34ch] text-lead text-white text-pretty md:max-w-[40ch]">{hero.lead}</p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <a
